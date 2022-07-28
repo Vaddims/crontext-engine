@@ -116,7 +116,7 @@ export class SimulationInspectorRenderingPipeline extends SimulationRenderingPip
     const renderingPosition = this.getRenderingPosition(meshRenderer.transform.position);
     const opticRotation = this.optic.rotation;
     const transformedShape = meshRenderer.shape.withTransform(meshRenderer.transform.rotation - opticRotation, meshRenderer.transform.scale.divide(this.optic.scale));
-    const shape = transformedShape.getBoundaryRectangle();
+    const shape = transformedShape.bounds;
     
     context.save();
     context.translate(renderingPosition.x, renderingPosition.y);
@@ -177,7 +177,7 @@ export class SimulationInspectorRenderingPipeline extends SimulationRenderingPip
   public renderEntityName(entity: Entity) {
     const { context } = this;
     const { scale, rotation, position } = entity.transform;
-    const boundaries = new Rectangle().withTransform(rotation, scale).withOffset(position).getBoundaryRectangle();
+    const boundaries = new Rectangle().withTransform(rotation, scale).withOffset(position).bounds;
     const renderingPosition = boundaries.vertices[0].subtract(this.optic.scenePosition).multiply(this.optic.scaledPixelsPerUnit(), Vector.reverseY);
     const margin = this.getRenderingPosition(Vector.up.multiply(0.1))
     context.save();
@@ -186,7 +186,5 @@ export class SimulationInspectorRenderingPipeline extends SimulationRenderingPip
     context.translate(...renderingPosition.raw);
     context.fillText(entity.name, ...margin.raw);
     context.restore();
-    
-    console.log('re')
   }
 }

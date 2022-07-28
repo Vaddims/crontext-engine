@@ -226,10 +226,7 @@ export class EntityTransform {
   }
 
   toPureTransform() {
-    const transform = new Transform();
-    transform.position = this.position.duplicate();
-    transform.scale = this.scale.duplicate();
-    transform.rotation = this.rotation;
+    const transform = new Transform(this.position, this.scale, this.rotation);
     return transform;
   }
 }

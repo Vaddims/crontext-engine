@@ -6,6 +6,10 @@ export function clamp(number: number, min: number, max: number) {
 }
 
 export function rotatedOffsetPosition(vector: Vector, rotation: number): Vector {
+  if (rotation === 0) {
+    return vector.duplicate();
+  }
+
   const { sin, cos } = Math;
   const x = vector.x * cos(rotation) - vector.y * sin(rotation);
   const y = vector.x * sin(rotation) + vector.y * cos(rotation);
@@ -43,7 +47,7 @@ export function segmentWithSegmentIntersection(segment1: Segment, segment2: Segm
   const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denominator;
   const u = ((x1 - x3) * (y1 - y2) - (y1 - y3) * (x1 - x2)) / denominator;
 
-  if (t > 0 && t < 1 && u > 0 && u < 1) {
+  if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
     // return new Vector(x1 - t * (x2 - x1), y1 - t * (y2 - y1));
     return new Vector(x3 + u * (x4 - x3), y3 + u * (y4 - y3))
   }
@@ -63,7 +67,7 @@ export function lineWithDiretionIntersection(pivot: Vector, direction: Vector, s
   const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denominator;
   const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denominator;
 
-  if (t > 0 && t <= 1 && u > 0) {
+  if (t >= 0 && t <= 1 && u >= 0) {
     return segment[0].add(segment[1].subtract(segment[0]).multiply(t));
   }
 }

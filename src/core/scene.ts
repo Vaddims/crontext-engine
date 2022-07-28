@@ -9,9 +9,11 @@ export class Scene extends SimulationNode {
     return this.children.values();
   }
 
-  public instantiate(entity: Entity) {
-    entity.setParent(this);
-    this.children.add(entity);
+  public instantiate(...entities: Entity[]) {
+    for (const entity of entities) {
+      entity.setParent(this);
+      this.children.add(entity);
+    }
   }
 
   public getAllEntities() {

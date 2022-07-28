@@ -2,6 +2,7 @@ import { SimulationNode } from "./simulation-node";
 import { EntityTransform } from "./entity-transform";
 import { Scene } from "./scene";
 import { EntityComponentSystem } from "./systems/entity-component-system";
+import { EntityLayerSystem } from "./systems/entity-layer-system";
 
 export class Entity extends SimulationNode {
   public name = "Entity";
@@ -9,6 +10,7 @@ export class Entity extends SimulationNode {
   protected readonly children = new Set<Entity>();
   public readonly components = new EntityComponentSystem(this);
   public readonly transform = new EntityTransform(this);
+  public readonly layers = new EntityLayerSystem();
 
   public setParent(parent: SimulationNode) {
     const currentParent = this.tryGetParent();

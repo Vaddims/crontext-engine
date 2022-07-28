@@ -43,8 +43,8 @@ export class Ray {
       }
 
       const vertices = collider.relativeVerticesPosition();
-      const segmentIndexes = new Shape(vertices).getSegmentIndexes();
-      for (const [i, j] of segmentIndexes) {
+      const { segmentVertexIndexes } = new Shape(vertices);
+      for (const [i, j] of segmentVertexIndexes) {
         const vertex = vertices[i];
         const nextVertex = vertices[j];
 
@@ -94,8 +94,9 @@ export class Ray {
   }
 
   research(scene: Scene): SceneRayResolution[];
-  research(segments: Segment[]): RayResolution[];
-  research(input: Scene | Segment[]) {
+  research(scene: Scene): SceneRayResolution[];
+  research(segments: Segment[] | readonly Segment[]): RayResolution[];
+  research(input: Scene | Segment[] | readonly Segment[]) {
     if (input instanceof Scene) {
       return this.researchScene(input);
     }
@@ -113,8 +114,8 @@ export class Ray {
       }
 
       const vertices = collider.relativeVerticesPosition();
-      const segmentIndexes = new Shape(vertices).getSegmentIndexes();
-      for (const [i, j] of segmentIndexes) {
+      const { segmentVertexIndexes } = new Shape(vertices);
+      for (const [i, j] of segmentVertexIndexes) {
         const vertex = vertices[i];
         const nextVertex = vertices[j];
 
@@ -136,7 +137,7 @@ export class Ray {
     return resolutions;
   }
 
-  private researchSegments(segments: Segment[]) {
+  private researchSegments(segments: Segment[] | readonly Segment[]) {
     const resolutions: RayResolution[] = [];
     for (const segment of segments) {
       const detectedAt = this.detect(segment[0], segment[1]);
@@ -175,7 +176,7 @@ export class Ray {
     return stack.size > 0;
   }
 
-  public static isPointInsideSegments(segments: Segment[], point: Vector) {
+  public static isPointInsideSegments(segments: readonly Segment[] | Segment[], point: Vector) {
     const ray = new Ray(point, Vector.right) ;
     const resolution = ray.research(segments);
     return resolution.length % 2 === 1;

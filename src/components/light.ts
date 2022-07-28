@@ -8,5 +8,6 @@ export interface LightSource {
 }
 
 export class LightSource extends Component {
+  public usePhysicalRendering = true; // Rendering with shadow casts
   public physicalRenderingDependence: ComponentConstructor<MeshRenderer> | ComponentConstructor<Collider> = MeshRenderer;
 }

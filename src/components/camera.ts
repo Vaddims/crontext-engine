@@ -7,18 +7,19 @@ import { SimulationRenderingPipeline, SimulationRenderingPipelineConstuctor } fr
 import { MeshRenderer } from "./mesh-renderer";
 import { LightSource } from "./light";
 import { AreaLight } from "./light-sources/area-light";
+import { Layer } from "../core/layer";
 
 export class Camera extends Component {
   public SimulationRenderingPipeline: SimulationRenderingPipelineConstuctor = SimulationRenderingPipeline;
 
+  public readonly layerMask: Layer[] = [Layer.camera];
   public canvasRelativePosition = Vector.zero;
   public canvasRelativeSize = Vector.one;
 
   public background = Color.white;
 
   render(renderer: SimulationRenderer) {
-    const { context, canvasSize, simulation } = renderer;
-    const { scene } = simulation;
+    const { context, canvasSize } = renderer;
     const optic = this.toOptic();
     optic.pixelsPerUnit = renderer.pixelsPerUnit;
     const renderingPipelineInstance = new this.SimulationRenderingPipeline(renderer.context, optic);
@@ -37,13 +38,10 @@ export class Camera extends Component {
     context.fill();
 
     context.translate(...cameraPixelPosition.add(cameraPixelSize.divide(2)).raw);
-    this.renderScene(renderer, renderingPipelineInstance);
 
-    for (const lightSource of scene.getAllComponentsOfType(LightSource)) {
-      if (lightSource instanceof AreaLight) {
-        lightSource.render(renderingPipelineInstance);
-      }
-    }
+    this.renderScene(renderer, renderingPipelineInstance);
+    this.renderSceneLight(renderer, renderingPipelineInstance);
+
     
     context.restore();
   }
@@ -51,13 +49,27 @@ export class Camera extends Component {
   protected renderScene(renderer: SimulationRenderer, renderingPipelineInstance: SimulationRenderingPipeline) {
     const { scene } = renderer.simulation;
 
-    for (const entity of scene) { // TODO ADD RENDERING LAYERS
+    for (const entity of scene) {
+      if (this.layerMask.some(layerMask => entity.layers.has(layerMask))) {
+        continue;
+      }
+
       const meshRenderer = entity.components.find(MeshRenderer);
       if (!meshRenderer) {
         continue;
       }
 
       renderingPipelineInstance.renderEntityMesh(meshRenderer);
+    }
+  }
+
+  protected renderSceneLight(renderer: SimulationRenderer, renderingPipelineInstance: SimulationRenderingPipeline) {
+    const { scene } = renderer.simulation;
+
+    for (const lightSource of scene.getAllComponentsOfType(LightSource)) {
+      if (lightSource instanceof AreaLight) {
+        lightSource.render(renderingPipelineInstance);
+      }
     }
   }
 
