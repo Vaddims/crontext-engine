@@ -17,6 +17,7 @@ export class SimulationInspector {
 
     const opticScale = Math.exp(this.scaleFactor * this.scaleStep);
     this.optic.scale = Vector.one.multiply(opticScale);
+    this.optic.scenePosition = new Vector(-10, 0)
   }
 
   setScale(scale: Vector) {

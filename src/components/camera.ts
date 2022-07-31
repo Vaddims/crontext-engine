@@ -6,7 +6,7 @@ import { Vector } from "../core/vector";
 import { SimulationRenderingPipeline, SimulationRenderingPipelineConstuctor } from "../rendering-pipelines/simulation-rendering-pipeline";
 import { MeshRenderer } from "./mesh-renderer";
 import { LightSource } from "./light";
-import { AreaLight } from "./light-sources/area-light";
+import { PointLight } from "./light-sources/point-light";
 import { Layer } from "../core/layer";
 
 export class Camera extends Component {
@@ -22,7 +22,7 @@ export class Camera extends Component {
     const { context, canvasSize } = renderer;
     const optic = this.toOptic();
     optic.pixelsPerUnit = renderer.pixelsPerUnit;
-    const renderingPipelineInstance = new this.SimulationRenderingPipeline(renderer.context, optic);
+    const renderingPipelineInstance = new this.SimulationRenderingPipeline(renderer, optic);
 
     const cameraPixelPosition = this.canvasRelativePosition.multiply(canvasSize);
     const cameraPixelSize = this.canvasRelativeSize.multiply(canvasSize);
@@ -67,7 +67,7 @@ export class Camera extends Component {
     const { scene } = renderer.simulation;
 
     for (const lightSource of scene.getAllComponentsOfType(LightSource)) {
-      if (lightSource instanceof AreaLight) {
+      if (lightSource instanceof PointLight) {
         lightSource.render(renderingPipelineInstance);
       }
     }

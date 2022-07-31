@@ -1,4 +1,4 @@
-import { Color, Component, Shape, Vector } from "../core";
+import { Color, Component, Shape, Transform, Vector } from "../core";
 import { Collision } from "../core/collision";
 import { Gizmos } from "../core/gizmos";
 import { Rectangle } from "../shapes";
@@ -23,7 +23,7 @@ export class Collider extends Component implements Collider {
   }
 
   public relativeVerticesPosition() {
-    const transformedShape = this.shape.withTransform(this.transform.rotation, this.transform.scale);
+    const transformedShape = this.shape.withTransform(Transform.setRotation(this.transform.rotation).setScale(this.transform.scale));
     return transformedShape.vertices.map(vertex => vertex.add(this.transform.position))
   }
 }

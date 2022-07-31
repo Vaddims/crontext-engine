@@ -5,20 +5,22 @@ import { Shape } from "../core/shape";
 import { Vector } from "../core/vector";
 import { Optic } from "../core/optic";
 import { rotatedOffsetPosition } from "../utils/crontext-math";
-import { Color } from "../core";
+import { Color, Renderer, Transform } from "../core";
+import { SimulationInspectorRenderer } from "../renderers";
 
 interface RadialGradientColorStop {
   offset: number;
   color: Color;
 }
 
-export class SimulationRenderingPipeline extends RenderingPipeline {
+export class SimulationRenderingPipeline<T extends SimulationRenderer = SimulationRenderer> extends RenderingPipeline<T> {
   public readonly context: CanvasRenderingContext2D;
   public readonly optic: Optic;
 
-  constructor(context: CanvasRenderingContext2D, optic: Optic) {
-    super(context);
-    this.context = context;
+  constructor(renderer: T, optic: Optic) {
+    super(renderer);
+    this.context = renderer.context;
+    if (!this.context) console.log('hmm')
     this.optic = optic;
   }
 
@@ -32,7 +34,7 @@ export class SimulationRenderingPipeline extends RenderingPipeline {
     const { position, rotation, scale } = entity.transform;
 
     const opticRotation = this.optic.rotation;
-    const transformedShape = shape.withTransform(rotation - opticRotation, scale);
+    const transformedShape = shape.withTransform(Transform.setRotation(rotation - opticRotation).setScale(scale));
 
     const renderingPosition = this.getRenderingPosition(position);
     const translate = rotatedOffsetPosition(renderingPosition, opticRotation);
@@ -163,5 +165,5 @@ export class SimulationRenderingPipeline extends RenderingPipeline {
 }
 
 export interface SimulationRenderingPipelineConstuctor {
-  new (context: CanvasRenderingContext2D, optic: Optic): SimulationRenderingPipeline;
+  new (renderer: SimulationRenderer, optic: Optic): SimulationRenderingPipeline;
 }

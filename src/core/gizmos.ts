@@ -7,7 +7,7 @@ import { Vector } from "./vector";
 
 export class Gizmos {
   constructor(
-    private readonly renderer: SimulationInspectorRenderer, 
+    public readonly renderer: SimulationInspectorRenderer, 
     private readonly renderingPipeline: SimulationInspectorRenderingPipeline
   ) {}
 
@@ -32,7 +32,7 @@ export class Gizmos {
     this.renderingPipeline.renderDisk(center, radius, color);
   }
 
-  public highlightVertices(vertices: Vector[], color = Color.black) {
+  public highlightVertices(vertices: Vector[] | readonly Vector[], color = Color.black) {
     for (let i = 0; i < vertices.length; i++) {
       const vertex = vertices[i];
       const nextVertex = i === vertices.length - 1 ? vertices[0] : vertices[i + 1];
@@ -46,5 +46,17 @@ export class Gizmos {
 
   public renderFixedDisk(center: Vector, radius: number, color = Color.black) {
     this.renderingPipeline.renderFixedDisk(center, radius, color);
+  }
+
+  public renderText(fulcrum: Vector, text: string, size = 2, color = Color.black) {
+    this.renderingPipeline.renderText(fulcrum, text, size, color);
+  }
+
+  public renderFixedText(fulcrum: Vector, text: string, size = 2, color = Color.black) {
+    this.renderingPipeline.renderFixedText(fulcrum, text, size, color);
+  }
+
+  public renderStaticText(fulcrum: Vector, text: string, size = 2, color = Color.black) {
+    this.renderingPipeline.renderStaticText(fulcrum, text, size, color);
   }
 }

@@ -6,4 +6,4 @@ export * from './light';
 export * from './colliders/circle-collider';
 export * from './colliders/plane-collider';
 export * from './colliders/rectangle-collider';
-export * from './light-sources/area-light';
+export * from './light-sources/point-light';

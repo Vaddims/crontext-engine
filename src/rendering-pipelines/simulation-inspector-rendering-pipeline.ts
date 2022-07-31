@@ -1,5 +1,5 @@
 import { MeshRenderer } from "../components/mesh-renderer";
-import { RenderingPipeline } from "../core";
+import { RenderingPipeline, Transform } from "../core";
 import { Optic } from "../core/optic";
 import { Shape } from "../core/shape";
 import { SimulationInspectorRenderer } from "../renderers/simulation-inspector-renderer";
@@ -13,17 +13,16 @@ import { Color } from "../core/color";
 import { rotatedOffsetPosition } from "../utils/crontext-math";
 import { Triangle } from "../shapes/triangle";
 
-export class SimulationInspectorRenderingPipeline extends SimulationRenderingPipeline {
-  renderCameraViewport(camera: Camera, canvasSize: Vector) {
+export class SimulationInspectorRenderingPipeline extends SimulationRenderingPipeline<SimulationInspectorRenderer> {
+  renderCameraViewport(camera: Camera) {
     const { position } = camera.transform;
     const cameraOptic = camera.toOptic();
     cameraOptic.pixelsPerUnit = this.optic.pixelsPerUnit;
     
     const renderingPosition = this.getRenderingPosition(position);
-    const pixelRatio = canvasSize.divide(canvasSize.y) // TODO REWORK FOR AXIS DEPENDECE
-    const unitFit = 10; // TODO DYNAMIC GET unitFit
-    const boundaryScale = Vector.one.multiply(unitFit, pixelRatio, cameraOptic.scale);
-    const boundary = new Rectangle().withTransform(cameraOptic.rotation, boundaryScale);
+    const { unitFit } = this.renderer;
+    const boundaryScale = Vector.one.multiply(unitFit, this.renderer.pixelRatio, cameraOptic.scale);
+    const boundary = new Rectangle().withTransform(Transform.setScale(boundaryScale).setRotation(cameraOptic.rotation));
     this.context.save();
     this.context.translate(...renderingPosition.raw);
     this.defineShapePath(boundary);
@@ -95,7 +94,7 @@ export class SimulationInspectorRenderingPipeline extends SimulationRenderingPip
       context.stroke();
 
       context.translate(point.x, point.y);
-      this.defineFixedShapePath(new Triangle().withTransform(rotation, new Vector(0.25, 0.5)));
+      this.defineFixedShapePath(new Triangle().withTransform(Transform.setRotation(rotation).setScale(new Vector(0.25, 0.5))));
       context.fill();
       context.restore();
     }
@@ -115,7 +114,7 @@ export class SimulationInspectorRenderingPipeline extends SimulationRenderingPip
 
     const renderingPosition = this.getRenderingPosition(meshRenderer.transform.position);
     const opticRotation = this.optic.rotation;
-    const transformedShape = meshRenderer.shape.withTransform(meshRenderer.transform.rotation - opticRotation, meshRenderer.transform.scale.divide(this.optic.scale));
+    const transformedShape = meshRenderer.shape.withTransform(Transform.setRotation(meshRenderer.transform.rotation - opticRotation).setScale(meshRenderer.transform.scale.divide(this.optic.scale)));
     const shape = transformedShape.bounds;
     
     context.save();
@@ -174,11 +173,47 @@ export class SimulationInspectorRenderingPipeline extends SimulationRenderingPip
     context.restore();
   }
 
+  public renderText(fulcrum: Vector, text: string, size = 2, color = Color.black) {
+    const { context } = this;
+    context.save();
+    const renderingPosition = this.getRenderingPosition(fulcrum);
+    const a = Vector.one.multiply(size).multiply(this.optic.scaledPixelsPerUnit());
+    context.translate(...renderingPosition.raw);
+    context.fillStyle = color.toString();
+    context.font = `${a.y}px Arial`
+    context.fillText(text, 0, 0);
+    context.restore();
+  }
+
+  public renderFixedText(fulcrum: Vector, text: string, size = 2, color = Color.black) {
+    const { context } = this;
+    context.save();
+    const renderingPosition = this.getRenderingPosition(fulcrum)
+    const a = Vector.one.multiply(size).multiply(this.optic.pixelsPerUnit);
+    context.translate(...renderingPosition.raw);
+    context.fillStyle = color.toString();
+    context.font = `${a.y}px Arial`
+    context.fillText(text, 0, 0);
+    context.restore();
+  }
+
+  public renderStaticText(fulcrum: Vector, text: string, size = 2, color = Color.black) {
+    const { context } = this;
+    context.save();
+    const renderingPosition = fulcrum.multiply(this.optic.pixelsPerUnit, Vector.reverseY);
+    const a = Vector.one.multiply(size).multiply(this.optic.pixelsPerUnit);
+    context.translate(...renderingPosition.raw);
+    context.fillStyle = color.toString();
+    context.font = `${a.y}px Arial`
+    context.fillText(text, 0, 0);
+    context.restore();
+  }
+
   public renderEntityName(entity: Entity) {
     const { context } = this;
-    const { scale, rotation, position } = entity.transform;
-    const boundaries = new Rectangle().withTransform(rotation, scale).withOffset(position).bounds;
-    const renderingPosition = boundaries.vertices[0].subtract(this.optic.scenePosition).multiply(this.optic.scaledPixelsPerUnit(), Vector.reverseY);
+    const entityPureTransform = entity.transform.toPureTransform();
+    const entityBounds = new Rectangle().withTransform(entityPureTransform).bounds;
+    const renderingPosition = entityBounds.vertices[0].subtract(this.optic.scenePosition).multiply(this.optic.scaledPixelsPerUnit(), Vector.reverseY);
     const margin = this.getRenderingPosition(Vector.up.multiply(0.1))
     context.save();
     context.font = '21px serif';

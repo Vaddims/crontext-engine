@@ -14,6 +14,10 @@ export class SimulationInspectorRenderer extends Renderer {
   public readonly inspector: SimulationInspector;
   public lastKnownMousePosition = Vector.zero;
 
+  public fps = 0;
+  public potentialFps = 0;
+  public lastPerformanceMesaure = performance.now();
+
   constructor(canvas: HTMLCanvasElement, simulation: Simulation) {
     super(canvas);
     this.inspector = new SimulationInspector(this, simulation);
@@ -58,6 +62,8 @@ export class SimulationInspectorRenderer extends Renderer {
   }
   
   public render(): void {
+    const renderStartStamp = performance.now();
+
     const { context, canvasSize } = this;
     const { scene } = this.inspector.simulation;
 
@@ -71,7 +77,7 @@ export class SimulationInspectorRenderer extends Renderer {
 
     const optic = this.inspector.optic;
     optic.pixelsPerUnit = this.pixelsPerUnit;
-    const renderingPipeline = new SimulationInspectorRenderingPipeline(this.context, optic);
+    const renderingPipeline = new SimulationInspectorRenderingPipeline(this, optic);
     const gizmos = new Gizmos(this, renderingPipeline);
     
     context.beginPath();
@@ -84,7 +90,7 @@ export class SimulationInspectorRenderer extends Renderer {
 
     context.translate(...canvasSize.divide(2).raw);
 
-    renderingPipeline.renderMeshMarkup(this.canvasSize);
+    // renderingPipeline.renderMeshMarkup(this.canvasSize);
     
     const validEntities = scene.getAllEntities(); // TODO REWORK WITH RENDERING LAYERS
     
@@ -120,11 +126,25 @@ export class SimulationInspectorRenderer extends Renderer {
 
     const cameras = scene.getAllComponentsOfType(Camera);
     for (const camera of cameras) {
-      renderingPipeline.renderCameraViewport(camera, this.canvasSize);
+      renderingPipeline.renderCameraViewport(camera);
     }
 
     context.restore();
 
     requestAnimationFrame(this.render.bind(this));
+
+    const renderEndStamp = performance.now();
+
+    const fpsDelta = (renderEndStamp - this.lastPerformanceMesaure) / 1000;
+    this.fps = 1 / fpsDelta;
+
+    const potentialFpsDelta = (renderEndStamp - renderStartStamp) / 1000;
+    this.potentialFps = 1 / potentialFpsDelta;
+
+    this.lastPerformanceMesaure = renderEndStamp;
+  }
+
+  public get simulation() {
+    return this.inspector.simulation;
   }
 }

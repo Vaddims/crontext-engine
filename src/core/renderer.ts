@@ -23,4 +23,8 @@ export abstract class Renderer {
   public get canvasSize() {
     return new Vector(this.canvas.width, this.canvas.height);
   }
+
+  public get pixelRatio() {
+    return this.canvasSize.divide(this.canvasSize.y) // TODO Change axis to dependent
+  }
 }
