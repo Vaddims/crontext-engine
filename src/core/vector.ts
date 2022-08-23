@@ -51,14 +51,14 @@ export class Vector {
 
   public rotation() {
     const angle = Math.atan2(this.y, this.x);
-    return angle > 0 ? angle : angle + Math.PI * 2;
+    return angle >= 0 ? angle : angle + Math.PI * 2;
   }
 
   public isEqual(vector: Vector) {
     return this.x === vector.x && this.y === vector.y;
   }
 
-  public isAlmostEqual(vector: Vector, range: number) {
+  public isAlmostEqual(vector: Vector, range: number = 0.001) {
     return Vector.distance(this, vector) <= range;
   }
 

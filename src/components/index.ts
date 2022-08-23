@@ -7,3 +7,4 @@ export * from './colliders/circle-collider';
 export * from './colliders/plane-collider';
 export * from './colliders/rectangle-collider';
 export * from './light-sources/point-light';
+export * from './light-sources/spot-light';

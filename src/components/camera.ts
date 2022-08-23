@@ -67,9 +67,7 @@ export class Camera extends Component {
     const { scene } = renderer.simulation;
 
     for (const lightSource of scene.getAllComponentsOfType(LightSource)) {
-      if (lightSource instanceof PointLight) {
-        lightSource.render(renderingPipelineInstance);
-      }
+      lightSource.render(renderingPipelineInstance);
     }
   }
 

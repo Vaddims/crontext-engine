@@ -7,6 +7,9 @@ import { Segment, Shape } from "./shape";
 import { Vector } from "./vector";
 
 export interface RayResolution {
+  pivot: Vector,
+  distance: number,
+  direction: Vector,
   intersectionPosition: Vector,
   segment: Segment,
 }
@@ -128,6 +131,9 @@ export class Ray {
         ] as const;
   
         resolutions.push({
+          pivot: this.pivot,
+          distance: this.distance,
+          direction: this.direction,
           intersectionPosition,
           segmentVertexIndexes,
           segment,

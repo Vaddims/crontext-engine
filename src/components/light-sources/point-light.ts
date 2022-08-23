@@ -1,5 +1,6 @@
 import { Color, Entity, Optic, Ray, Renderer, RenderingPipeline, Scene, Segment, Shape, ShapeIntersection, Transform, Vector } from "../../core";
 import { Gizmos } from "../../core/gizmos";
+import { VisibilityPolygon } from "../../core/visibility-polygon";
 import { SimulationRenderer } from "../../renderers";
 import { SimulationRenderingPipeline } from "../../rendering-pipelines";
 import { Rectangle } from "../../shapes";
@@ -38,12 +39,12 @@ export class PointLight extends LightSource {
 
   render(simulationRenderingPipeline: SimulationRenderingPipeline) {
     const { renderer } = simulationRenderingPipeline;
-    const res = this.getMaskInfo(renderer);
-    if (!res) {
+    const maskPath = this.getVisibilityPolygon(renderer);
+    
+    // const { maskPath } = res;
+    if (!maskPath) {
       return;
     }
-
-    const { maskPath } = res;
 
     const { remove: removeMask } = simulationRenderingPipeline.createMask(Array.from(maskPath));
 
@@ -56,20 +57,26 @@ export class PointLight extends LightSource {
     }]);
 
     removeMask();
+    simulationRenderingPipeline.renderRadialGradient(this.transform.position, this.range / 5, [{
+      offset: 0,
+      color: new Color(255, 255, 255, 0.3),
+    }, {
+      offset: 0.5,
+      color: Color.transparent,
+    }]);
   }
 
+
   gizmosRender(gizmos: Gizmos) {
-    
+    const maskPath = this.getVisibilityPolygon(gizmos.renderer);
 
-    const resolution = this.getMaskInfo(gizmos.renderer);
-
-    const {
-      checkpointRaycasts,
-      maskPath,
-      shapeInterimVertices,
-      checkpointVertices,
-      lightBoundsInterimVertices,
-    } = resolution ?? {};
+    // const {
+    //   checkpointRaycasts,
+    //   maskPath,
+    //   shapeInterimVertices,
+    //   checkpointVertices,
+    //   lightBoundsInterimVertices,
+    // } = resolution ?? {};
     
     const lineColor = new Color(0, 0, 255, 0.1);
     const vertexColor = Color.blue;
@@ -96,11 +103,11 @@ export class PointLight extends LightSource {
     const list = [
       `${this.fps} fps`,
       '',
-      `${checkpointVertices?.length ?? 0} total checkpoint vertices`,
-      `${shapeInterimVertices?.length ?? 0} entity to entity overlaping vertices`,
-      `${lightBoundsInterimVertices?.length ?? 0} entity overlap vertices with light bounds`,
-      '',
-      `${checkpointRaycasts?.length ?? 0} mask checkpoint raycasts`,
+      // `${checkpointVertices?.length ?? 0} total checkpoint vertices`,
+      // `${shapeInterimVertices?.length ?? 0} entity to entity overlaping vertices`,
+      // `${lightBoundsInterimVertices?.length ?? 0} entity overlap vertices with light bounds`,
+      // '',
+      // `${checkpointRaycasts?.length ?? 0} mask checkpoint raycasts`,
       `${maskPath?.length ?? 0} mask path vertices`,
     ]
 
@@ -115,50 +122,19 @@ export class PointLight extends LightSource {
     return new Rectangle().withTransform(boundsTransform);
   }
 
-  public getSegmentVerticesUtils() {
-    // To keep track of the vertecies that belongs to specific shape segments (Is needed for mask connection)
-    const segmentVertices = new Map<Segment, Vector[]>();
-    const addSegmentVertices = (segment: Segment, ...additionalVertices: Vector[]) => {
-      const vertices = segmentVertices.get(segment);
-      if (!vertices) {
-        segmentVertices.set(segment, [...additionalVertices]);
-        return;
-      }
-
-      vertices.push(...additionalVertices);
-    }
-
-    const verticesShareSegment = (a: Vector, b: Vector) => 
-      Array.from(segmentVertices.values()).some(vertices => vertices.includes(a) && vertices.includes(b));
-
-    return {
-      segmentVertices,
-      addSegmentVertices,
-      verticesShareSegment,
-    }
-  }
-
-  private getEntityShapes(lightBounds: Shape) {
-    const scene = this.entity.getScene();
-
+  private getEntityShapes(entities: Scene | Entity[]) {
     const entityShapes: Shape[] = [];
-    for (const entity of scene) {
+    for (const entity of entities) {
       const componentInstance = entity.components.find(this.physicalRenderingDependence);
       if (!componentInstance) {
         continue;
       }
       
-      const positionedVertices = componentInstance.relativeVerticesPosition();
-      const positionedShape = new Shape(positionedVertices);
-
-      const entityBounds = new Shape(positionedVertices).bounds;
-      if (!boundsOverlaping(entityBounds, lightBounds)) {
-        continue;
-      }
-
-      entityShapes.push(positionedShape);
+      const entityShapeVertices = componentInstance.relativeVerticesPosition();
+      const entityShape = new Shape(entityShapeVertices);
+      entityShapes.push(entityShape);
     }
-
+    
     return entityShapes;
   }
 
@@ -168,159 +144,131 @@ export class PointLight extends LightSource {
     return escapeRayOpenStack.size !== 0;
   }
 
-  private getMaskInfo(renderer: SimulationRenderer) {
-    const { segmentVertices, addSegmentVertices, verticesShareSegment } = this.getSegmentVerticesUtils();
-
+  private getVisibilityPolygon(renderer: SimulationRenderer) {
+    if (this.frameMaskCache) {
+      return this.frameMaskCache;
+    }
+    
+    const scene = this.entity.getScene();
+    const entityShapes = this.getEntityShapes(scene);
     const lightBounds = this.getBounds();
-    
-    const entityShapes = this.getEntityShapes(lightBounds);
-    const checkpointVertices: Vector[] = [...lightBounds.vertices, ...entityShapes.map(shape => shape.vertices).flat()];
-    const entitySegments: Segment[] = entityShapes.map(shape => shape.segments).flat();
-    
-    lightBounds.segments.forEach(segment => addSegmentVertices(segment, ...segment));
-    entitySegments.forEach(segment => addSegmentVertices(segment, ...segment));
-    
-    const checkpointRaycasts: RaycastCheckpoint[] = [];
+    const visibilityPolygon = VisibilityPolygon.createPanorama({
+      fulcrum: this.transform.position,
+      obsticles: entityShapes,
+      externalMasks: [lightBounds],
+    });
 
+    this.frameMaskCache = visibilityPolygon.pathCreator.path;
+
+    return visibilityPolygon.pathCreator.path;
+
+
+
+    /*
+
+    const visibleEntityShapes = entityShapes.filter(shape => VisibilityPolygon.shapeOverlapsVisibilityBounds(shape, lightBounds));
+    const visibleEntityShapeSegments = visibleEntityShapes.map(shape => shape.segments).flat();
+    
     // Check if shape is overlaping the light
-    if (this.overlapsShape(entityShapes, [lightBounds])) {
+    if (this.overlapsShape(visibleEntityShapes, [lightBounds])) {
       return;
     }
-    
-    const shapesWithLightBoundsIntersections = entityShapes.map(shape => Shape.intersections(lightBounds, shape)).flat();
-    const lightBoundsInterimVertices: Vector[] = [];
-    for (const intersection of shapesWithLightBoundsIntersections) {
-      const { position, segmentHolders } = intersection
-      checkpointVertices.push(position);
-      lightBoundsInterimVertices.push(position);
-      segmentHolders.forEach(holder => addSegmentVertices(holder, position))
-    }
+
+    const checkpointVertices = visibleEntityShapes.map(shape => shape.vertices).flat().concat(lightBounds.vertices);
+    const segmentShareMap = new VisibilityPolygon.SegmentShareMap(...lightBounds.segments, ...visibleEntityShapeSegments);
 
     // Vertices which are intersects of entity segments
+    const shapesWithLightBoundsIntersections = visibleEntityShapes.map(shape => Shape.intersections(lightBounds, shape)).flat();
     const shapeWithShapeIntersections: ShapeIntersection[] = [];
-    for (let i = 0; i < entityShapes.length; i++) {
-      for (let j = i + 1; j < entityShapes.length; j++) {
-        const intersection = Shape.intersections(entityShapes[i], entityShapes[j]);
+    for (let i = 0; i < visibleEntityShapes.length; i++) {
+      for (let j = i + 1; j < visibleEntityShapes.length; j++) {
+        const intersection = Shape.intersections(visibleEntityShapes[i], visibleEntityShapes[j]);
         if (!intersection) {
           continue;
         }
-
+        
         shapeWithShapeIntersections.push(...intersection);
       }
     }
-
-    const shapeInterimVertices: Vector[] = [];
-    for (const intersection of shapeWithShapeIntersections) {
-      const { position, segmentHolders } = intersection
-      checkpointVertices.push(position);
-      shapeInterimVertices.push(position);
-      segmentHolders.forEach(holder => addSegmentVertices(holder, position))
+    
+    const lightBoundsInterimVertices = shapesWithLightBoundsIntersections.map(intersection => intersection.position);
+    const shapeInterimVertices = shapeWithShapeIntersections.map(intersection => intersection.position);
+    checkpointVertices.push(...lightBoundsInterimVertices, ...shapeInterimVertices);
+    
+    const intersections = [...shapesWithLightBoundsIntersections, ...shapeWithShapeIntersections];
+    for (const intersection of intersections) {
+      segmentShareMap.addHolders(intersection.position, intersection.segmentHolders);
     }
 
     // Create raycast checkpoints
-    const shapes: Shape[] = [lightBounds, ...entityShapes];
-    for (const vertex of checkpointVertices) {
-      const relativeVertexPosition = vertex.subtract(this.transform.position); // Not normalized for precision safety
-      const exposedRayCollision = new Ray(this.transform.position, relativeVertexPosition).cast(shapes);
+    const shapes: Shape[] = [lightBounds, ...visibleEntityShapes];
+    const checkpointRaycasts = VisibilityPolygon.createRaycastCheckpoints({
+      fulcrum: this.transform.position,
+      entityShapes: visibleEntityShapes,
+      lightBoundsInterimVertices,
+      shapeInterimVertices,
+      checkpointVertices,
+      segmentShareMap,
+      lightBounds,
+      shapes,
+    });
 
-      if (!exposedRayCollision?.intersectionPosition.isAlmostEqual(vertex, this.raycastInaccuracy)) {
-        // The ray hitted something before the target vertex
-        continue;
-      }
-
-      if (
-        shapeInterimVertices.includes(vertex) ||
-        lightBounds.vertices.includes(vertex) ||
-        lightBoundsInterimVertices.includes(vertex)
-      ) {
-        // No need for secondary ray casting because it is a "special" vertex
-        checkpointRaycasts.push({
-          exposed: vertex,
-        });
-
-        continue;
-      }
-
-      const segmentsConnectedToTargetVertex: Segment[] = [];
-      for (const [segment, vertices] of segmentVertices) {
-        if (vertices.includes(vertex)) {
-          segmentsConnectedToTargetVertex.push(segment);
-        }
-      }
-
-      const secondaryRayCollision = new Ray(vertex, relativeVertexPosition).cast(shapes, { 
-        segmentMask: segmentsConnectedToTargetVertex 
-      });
-
-      if (!secondaryRayCollision) {
-        throw new Error('Area light endpoint ray did not overlap with its boundary box.');
-      }
-
-      const secondaryRayDifferenceSize = secondaryRayCollision.intersectionPosition.subtract(vertex);
-      const secondaryRayDifferenceCenter = vertex.add(secondaryRayDifferenceSize.divide(2));
-      const openStackEscape = Ray.escape(secondaryRayDifferenceCenter).researchOpenStacks(entityShapes);
-      const shapeOverlapsLightSource = openStackEscape.size > 0;
-
-      if (!shapeOverlapsLightSource) {
-        checkpointRaycasts.push({
-          exposed: vertex,
-          endpoint: secondaryRayCollision.intersectionPosition,
-          endpointSegment: secondaryRayCollision.segment,
-        })
-  
-        addSegmentVertices(secondaryRayCollision.segment, secondaryRayCollision.intersectionPosition);
-      } else {
-        checkpointRaycasts.push({
-          exposed: vertex,
-        })
+    for (const checkpointRaycast of checkpointRaycasts) {
+      const { endpoint, endpointSegment } = checkpointRaycast;
+      if (endpoint && endpointSegment) {
+        segmentShareMap.add(endpointSegment, endpoint)
       }
     }
-    
+
     const maskPath: Vector[] = [];
     const relativeCheckpointRotation = (vertex: Vector) => vertex.subtract(this.transform.position).rotation();
     checkpointRaycasts.sort((a, b) => relativeCheckpointRotation(a.exposed) - relativeCheckpointRotation(b.exposed));
 
+    const visibilityPolygonPathCreator = new VisibilityPolygon.PathCreator(segmentShareMap);
+
     // Create mask path
     for (let i = 0; i < checkpointRaycasts.length; i++) {
-      const segmentInfo = checkpointRaycasts[i];
-      const previousIndex = i === 0 ? checkpointRaycasts.length - 1 : i - 1;
-      const previousSegmentInfo = checkpointRaycasts[previousIndex];
+      const currentCheckpointRaycast = checkpointRaycasts[i];
+      const previousCheckpointRaycast = checkpointRaycasts.at(i - 1);
 
-      if (verticesShareSegment(segmentInfo.exposed, previousSegmentInfo.exposed)) {
-        maskPath.push(segmentInfo.exposed);
-        if (segmentInfo.endpoint) {
-          maskPath.push(segmentInfo.endpoint);
-        }
+      if (!previousCheckpointRaycast) {
+        throw new Error(`previousCheckpointRaycast doesn't exist`);
+      }
+
+      if (visibilityPolygonPathCreator.exposedConnection(currentCheckpointRaycast, previousCheckpointRaycast)) {
         continue;
       }
 
-      if (segmentInfo.endpoint && previousSegmentInfo.endpoint && verticesShareSegment(segmentInfo.endpoint, previousSegmentInfo.endpoint)) {
-        maskPath.push(segmentInfo.endpoint);
-        maskPath.push(segmentInfo.exposed);
+      if (visibilityPolygonPathCreator.endpointConnection(currentCheckpointRaycast, previousCheckpointRaycast)) {
         continue;
       }
 
-      if (segmentInfo.endpoint && verticesShareSegment(segmentInfo.endpoint, previousSegmentInfo.exposed)) {
-        maskPath.push(segmentInfo.endpoint);
-        maskPath.push(segmentInfo.exposed);
+      if (visibilityPolygonPathCreator.increasingConnection(currentCheckpointRaycast, previousCheckpointRaycast)) {
         continue;
       }
 
-      if (previousSegmentInfo.endpoint && verticesShareSegment(segmentInfo.exposed, previousSegmentInfo.endpoint)) {
-        maskPath.push(segmentInfo.exposed);
-        if (segmentInfo.endpoint) {
-          maskPath.push(segmentInfo.endpoint);
-        }
+      if (visibilityPolygonPathCreator.decreasingConnection(currentCheckpointRaycast, previousCheckpointRaycast)) {
+        continue;
       }
     }
 
-    return {
-      lightBounds,
-      checkpointVertices,
-      checkpointRaycasts,
-      shapeInterimVertices,
-      lightBoundsInterimVertices,
-      maskPath,
-    };
+    return this.frameMaskCache = visibilityPolygonPathCreator.path;
+    */
+
+
+
+
+
+
+
+
+    // return {
+    //   lightBounds,
+    //   checkpointVertices,
+    //   checkpointRaycasts,
+    //   shapeInterimVertices,
+    //   lightBoundsInterimVertices,
+    //   maskPath,
+    // };
   }
 }

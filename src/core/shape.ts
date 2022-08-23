@@ -3,7 +3,7 @@ import { Transform } from "./transform";
 import { Vector } from "./vector";
 
 export type SegmentIndexes = [number, number];
-export type Segment = [Vector, Vector];
+export type Segment = readonly [Vector, Vector];
 
 export interface ShapeIntersection {
   position: Vector;
@@ -128,5 +128,13 @@ export class Shape {
 
     this.cachedBounds = bounds;
     return bounds;
+  }
+
+  public static vertexCluster(shapes: Shape[]) {
+    return shapes.map(shape => shape.vertices).flat();
+  }
+
+  public static segmentCluster(shapes: Shape[]) {
+    return shapes.map(shape => shape.segments).flat();
   }
 }
