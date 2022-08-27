@@ -1,4 +1,5 @@
-import { Component, ComponentConstructor, Ray, Renderer, Segment, Shape, Vector } from "../core";
+import { Component, ComponentConstructor, Ray, Renderer, Shape, Vector } from "../core";
+import { VisibilityPolygon } from "../core/visibility-polygon";
 import { SimulationRenderingPipeline } from "../rendering-pipelines";
 import { Collider } from "./collider";
 import { MeshRenderer } from "./mesh-renderer";
@@ -9,7 +10,7 @@ export interface StableCheckpointRaycast {
 
 export interface ReflectiveCheckpointRaycast extends StableCheckpointRaycast {
   readonly endpoint: Vector;
-  readonly endpointSegment: Segment;
+  readonly endpointSegment: Shape.Segment;
 }
 
 export type CheckpointRaycast = StableCheckpointRaycast & Partial<ReflectiveCheckpointRaycast>;
@@ -33,18 +34,18 @@ export interface LightSource {
 export class LightSource extends Component {
   public usePhysicalRendering = true; // Rendering with shadow casts
   public physicalRenderingDependence: ComponentConstructor<MeshRenderer> | ComponentConstructor<Collider> = MeshRenderer;
-  public frameMaskCache: Vector[] | null = null;
+  public visibilityPolygonCache: VisibilityPolygon | null = null;
 
   public static createStableRaycastCheckpoint(exposed: Vector): StableCheckpointRaycast {
     return { exposed };
   }
 
-  public static createReflectiveRaycastCheckpoint(exposed: Vector, endpoint: Vector, endpointSegment: Segment) {
+  public static createReflectiveRaycastCheckpoint(exposed: Vector, endpoint: Vector, endpointSegment: Shape.Segment) {
     return { exposed, endpoint, endpointSegment };
   }
 
   public static SegmentShareMap = class SegmentShareMap extends Map {
-    add(segment: Segment, ...vertices: Vector[]) {
+    add(segment: Shape.Segment, ...vertices: Vector[]) {
       const requiredVertices = vertices.length === 0 ? [...segment] : vertices; 
       const existingVertices = this.get(segment);
 
@@ -92,7 +93,7 @@ export class LightSource extends Component {
         continue;
       }
 
-      const checkpointVertexSegments: Segment[] = [];
+      const checkpointVertexSegments: Shape.Segment[] = [];
       for (const [segment, segmentVertices] of segmentShareMap) {
         if (segmentVertices.includes(checkpointVertex)) {
           checkpointVertexSegments.push(segment);
@@ -130,6 +131,6 @@ export class LightSource extends Component {
   }
 
   public update() {
-    this.frameMaskCache = null;
+    this.visibilityPolygonCache = null;
   }
 }

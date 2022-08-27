@@ -90,11 +90,11 @@ export class SimulationInspectorRenderer extends Renderer {
 
     context.translate(...canvasSize.divide(2).raw);
 
-    // renderingPipeline.renderMeshMarkup(this.canvasSize);
+    renderingPipeline.renderMeshMarkup(this.canvasSize);
     
-    const validEntities = scene.getAllEntities(); // TODO REWORK WITH RENDERING LAYERS
+    const visibleEntities = scene.getAllEntities(); // TODO REWORK WITH RENDERING LAYERS
     
-    for (const entity of validEntities) {
+    for (const entity of visibleEntities) {
       const meshRenderer = entity.components.find(MeshRenderer);
       if (!meshRenderer) {
         continue;
@@ -103,7 +103,7 @@ export class SimulationInspectorRenderer extends Renderer {
       renderingPipeline.renderEntityMesh(meshRenderer);
     }
 
-    for (const entity of validEntities) {
+    for (const entity of visibleEntities) {
       for (const component of entity.components) {
         component.gizmosRender?.(gizmos);
       }
@@ -117,16 +117,12 @@ export class SimulationInspectorRenderer extends Renderer {
       if (entity.components.find(Camera)) {
         continue;
       }
+
       if (meshRenderer) {
         renderingPipeline.highlightMesh(meshRenderer);
       }
 
       renderingPipeline.renderEntityTransform(entity);
-    }
-
-    const cameras = scene.getAllComponentsOfType(Camera);
-    for (const camera of cameras) {
-      renderingPipeline.renderCameraViewport(camera);
     }
 
     context.restore();

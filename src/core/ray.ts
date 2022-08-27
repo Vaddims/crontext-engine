@@ -3,7 +3,7 @@ import { lineWithDiretionIntersection } from "../utils";
 import { Collision } from "./collision";
 import { Entity } from "./entity";
 import { Scene } from "./scene";
-import { Segment, Shape } from "./shape";
+import { Shape } from "./shape";
 import { Vector } from "./vector";
 
 export interface RayResolution {
@@ -11,7 +11,7 @@ export interface RayResolution {
   distance: number,
   direction: Vector,
   intersectionPosition: Vector,
-  segment: Segment,
+  segment: Shape.Segment,
 }
 
 export interface SceneRayResolution extends RayResolution {
@@ -26,7 +26,7 @@ export interface ShapeRayResolution extends RayResolution {
 }
 
 export interface RayResearchOptions {
-  segmentMask?: Segment[];
+  segmentMask?: Shape.Segment[];
   shapeMask?: Shape[];
 }
 

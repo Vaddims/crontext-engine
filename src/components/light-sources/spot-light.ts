@@ -1,4 +1,4 @@
-import { Color, Ray, Segment, Shape, ShapeIntersection, Transform, Vector } from "../../core";
+import { Color, Ray, Shape, Transform, Vector } from "../../core";
 import { Gizmos } from "../../core/gizmos";
 import { VisibilityPolygon } from "../../core/visibility-polygon";
 import { SimulationRenderer } from "../../renderers";
@@ -9,7 +9,7 @@ import { LightSource } from "../light";
 interface RaycastCheckpoint {
   exposed: Vector,
   endpoint?: Vector,
-  endpointSegment?: Segment,
+  endpointSegment?: Shape.Segment,
 }
 
 
@@ -31,9 +31,9 @@ export class SpotLight extends LightSource {
 
   render(simulationRenderingPipeline: SimulationRenderingPipeline) {
     const { renderer } = simulationRenderingPipeline;
-    const path = this.getMaskInfo(renderer);
+    const visibilityPolygon = this.getVisibilityPolygon(renderer);
 
-    const { remove: removeMask } = simulationRenderingPipeline.createMask(Array.from(path));
+    const { remove: removeMask } = simulationRenderingPipeline.createMask(visibilityPolygon.pathCreator.path);
 
     simulationRenderingPipeline.renderRadialGradient(this.transform.position, this.range, [{
       offset: 0,
@@ -47,37 +47,16 @@ export class SpotLight extends LightSource {
   }
 
   gizmosRender(gizmos: Gizmos) {
-    
-
-    const path = this.getMaskInfo(gizmos.renderer);
-
-    // const {
-    //   filteredCheckpointRaycasts,
-    //   maskPath,
-    //   shapeInterimVertices,
-    //   checkpointVertices,
-    //   lightBoundsInterimVertices,
-    //   positiveResolution,
-    //   negativeResolution,
-    //   negativeAngle,
-    //   positiveAngle,
-    //   basisAngle
-    // } = resolution ?? {};
+    const visibilityPolygon = this.getVisibilityPolygon(gizmos.renderer);
+    const { path } = visibilityPolygon.pathCreator;
     
     const lineColor = new Color(0, 0, 255, 0.1);
-    const vertexColor = Color.blue;
-    const vertexHighlightRadius = 0.1
 
-    // if (positiveResolution && negativeResolution) {
-    //   gizmos.renderFixedCircle(positiveResolution.intersectionPosition, 0.1, Color.red);
-    //   gizmos.renderFixedCircle(negativeResolution.intersectionPosition, 0.1, Color.red);
-    //   // console.log(positiveResolution.intersectionPosition + ' ' + negativeResolution.intersectionPosition)
-    // }
-    // gizmos.highlightVertices(new Rectangle().withScale(this.range).withOffset(this.transform.position).vertices, new Color(0, 0, 255, 0.1))
+    gizmos.highlightVertices(new Rectangle().withScale(this.range).withOffset(this.transform.position).vertices, new Color(0, 0, 255, 0.1))
     
-    // if (maskPath) {
-    //   gizmos.highlightVertices(Array.from(maskPath), Color.blue);
-    // }
+    if (path) {
+      gizmos.highlightVertices(path, Color.blue);
+    }
 
     if (path) {
       for (let i = 0; i < path.length; i++) {
@@ -86,14 +65,14 @@ export class SpotLight extends LightSource {
       }
     }
 
-    // if (checkpointRaycasts) {
-    //   for (const c of checkpointRaycasts) {
-    //     gizmos.renderLine(this.transform.position, c.exposed, lineColor);
-    //     if (c.endpoint) {
-    //       gizmos.renderLine(c.exposed, c.endpoint, lineColor);
-    //     }
-    //   }
-    // }
+    if (visibilityPolygon.checkpointRaycasts) {
+      for (const checkpointRaycast of visibilityPolygon.checkpointRaycasts) {
+        gizmos.renderLine(this.transform.position, checkpointRaycast.exposed, lineColor);
+        if (checkpointRaycast.endpoint) {
+          gizmos.renderLine(checkpointRaycast.exposed, checkpointRaycast.endpoint, lineColor);
+        }
+      }
+    }
 
     if (this.rerateFPS) {
       this.rerateFPS = false;
@@ -102,16 +81,14 @@ export class SpotLight extends LightSource {
     
     const list = [
       `${this.fps} fps`,
-      // '',
-      // `${checkpointVertices?.length ?? 0} total checkpoint vertices`,
-      // `${shapeInterimVertices?.length ?? 0} entity to entity overlaping vertices`,
-      // `${lightBoundsInterimVertices?.length ?? 0} entity overlap vertices with light bounds`,
-      // '',
-      // `${filteredCheckpointRaycasts?.length ?? 0} mask checkpoint raycasts`,
-      // `${maskPath?.length ?? 0} mask path vertices`,
-      // `${basisAngle?.toFixed(2)} basis angle`,
-      // `${negativeAngle} neg angle`,
-      // `${(positiveAngle)} pos angle`
+      '',
+      `${visibilityPolygon.checkpointVertices.length} total checkpoint vertices`,
+      `${visibilityPolygon.obsticlesWithObsticlesInterimVertices.length} entity to entity overlaping vertices`,
+      `${visibilityPolygon.obsticlesWithBoundsInterimVertices.length} entity overlap vertices with light bounds`,
+      '',
+      `${visibilityPolygon.checkpointRaycasts.length} mask checkpoint raycasts`,
+      `${path.length} mask path vertices`,
+      `${this.angle.toFixed(2)} basis angle`,
     ]
 
     for (let i = 0; i < list.length; i++) {
@@ -151,8 +128,8 @@ export class SpotLight extends LightSource {
 
   public getSegmentVerticesUtils() {
     // To keep track of the vertecies that belongs to specific shape segments (Is needed for mask connection)
-    const segmentVertices = new Map<Segment, Vector[]>();
-    const addSegmentVertices = (segment: Segment, ...additionalVertices: Vector[]) => {
+    const segmentVertices = new Map<Shape.Segment, Vector[]>();
+    const addSegmentVertices = (segment: Shape.Segment, ...additionalVertices: Vector[]) => {
       const vertices = segmentVertices.get(segment);
       if (!vertices) {
         segmentVertices.set(segment, [...additionalVertices]);
@@ -178,7 +155,7 @@ export class SpotLight extends LightSource {
     return escapeRayOpenStack.size !== 0;
   }
 
-  private getMaskInfo(renderer: SimulationRenderer) {
+  private getVisibilityPolygon(renderer: SimulationRenderer) {
     const lightBounds = this.getBounds();    
     const entityShapes = this.getEntityShapes(lightBounds);
 
@@ -189,6 +166,6 @@ export class SpotLight extends LightSource {
       fulcrum: this.transform.position,
       obsticles: entityShapes,
       externalMasks: [lightBounds],
-    }).pathCreator.path;
+    });
   }
 }

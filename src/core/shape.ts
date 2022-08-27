@@ -2,20 +2,22 @@ import { rotatedOffsetPosition, segmentWithSegmentIntersection } from "../utils/
 import { Transform } from "./transform";
 import { Vector } from "./vector";
 
-export type SegmentIndexes = [number, number];
-export type Segment = readonly [Vector, Vector];
+export namespace Shape {
+  export type Segment = [Vector, Vector];
+  export type SegmentIndexes = [number, number];
 
-export interface ShapeIntersection {
-  position: Vector;
-  segmentHolders: [Segment, Segment];
+  export interface SegmentIntersection {
+    readonly position: Vector;
+    readonly segmentHolders: readonly [Segment, Segment] | [Segment, Segment];
+  }
 }
 
 export class Shape {
-  private verticesClockwiseInitialization = false;
+  protected clockwiseInitialization = false;
   
   public readonly vertices: ReadonlyArray<Vector>;
-  public readonly segmentVertexIndexes: ReadonlyArray<SegmentIndexes>;
-  public readonly segments: ReadonlyArray<Segment>;
+  public readonly segmentVertexIndexes: ReadonlyArray<Shape.SegmentIndexes>;
+  public readonly segments: ReadonlyArray<Shape.Segment>;
 
   private cachedBounds: Shape | null = null;
 
@@ -53,8 +55,8 @@ export class Shape {
 
   }
 
-  public static intersections(a: Shape, b: Shape) {
-    const intersections: ShapeIntersection[] = [];
+  public static segmentIntersections(a: Shape, b: Shape) {
+    const intersections: Shape.SegmentIntersection[] = [];
     for (let i = 0; i < a.segments.length; i++) {
       for (let j = 0; j < b.segments.length; j++) {
         const intersection = segmentWithSegmentIntersection(a.segments[i], b.segments[j]);
@@ -72,16 +74,10 @@ export class Shape {
     return intersections;
   }
 
-
   public withRotation(rotation: number) {
     const vertices = this.vertices.map(vertex => rotatedOffsetPosition(vertex, rotation));
     return new Shape(vertices);
   }
-
-  // public transform({ position, scale, rotation }: Transform) {
-  //   const vertices = this.vertices.map(vertex => rotatedOffsetPosition(vertex, rotation).multiply(scale).add(position));
-  //   return new Shape(vertices);
-  // }
 
   public withScale(scale: Vector | number) {
     const vertices = this.vertices.map(vertex => vertex.multiply(scale));
@@ -130,11 +126,58 @@ export class Shape {
     return bounds;
   }
 
+  public overlaps(target: Shape) {
+    const shapes = [this, target];
+
+    const perpendicularProjection = (shape: Shape, normal: Vector) => {
+      let min = Infinity;
+      let max = -Infinity;
+
+      for (const vertex of shape) {
+        const projected = normal.x * vertex.x + normal.y * vertex.y;
+
+        if (projected < min) {
+          min = projected;
+        }
+
+        if (projected > max) {
+          max = projected;
+        }
+      }
+
+      return [min, max];
+    }
+
+    for (const shape of shapes) {
+      for (const segment of shape.segments) {
+        const [p1, p2] = segment;
+
+        const normal = new Vector(p2.y - p1.y, p1.x - p2.x);
+
+        const [minA, maxA] = perpendicularProjection(this, normal);
+        const [minB, maxB] = perpendicularProjection(target, normal);
+
+        if (maxA < minB || maxB < minA) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
   public static vertexCluster(shapes: Shape[]) {
     return shapes.map(shape => shape.vertices).flat();
   }
 
   public static segmentCluster(shapes: Shape[]) {
     return shapes.map(shape => shape.segments).flat();
+  }
+
+  public static boundsOverlaps(a: Shape, b: Shape) {
+    const av = a.vertices;
+    const bv = b.vertices;
+  
+    return av[1].x > bv[0].x && av[0].x < bv[1].x && av[0].y > bv[3].y && av[3].y < bv[0].y;
   }
 }

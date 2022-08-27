@@ -1,4 +1,4 @@
-import { Segment } from "../core";
+import { Shape } from "../core";
 import { Vector } from "../core/vector";
 
 export function clamp(number: number, min: number, max: number) {
@@ -16,7 +16,7 @@ export function rotatedOffsetPosition(vector: Vector, rotation: number): Vector 
   return new Vector(x, y);
 }
 
-export function lineWithLineIntersection(segment1: Segment, segment2: Segment) {
+export function lineWithLineIntersection(segment1: Shape.Segment, segment2: Shape.Segment) {
   const [x1, y1] = segment1[0].raw;
   const [x2, y2] = segment1[1].raw;
   const [x3, y3] = segment2[0].raw;
@@ -33,7 +33,7 @@ export function lineWithLineIntersection(segment1: Segment, segment2: Segment) {
   return p;
 }
 
-export function segmentWithSegmentIntersection(segment1: Segment, segment2: Segment) {
+export function segmentWithSegmentIntersection(segment1: Shape.Segment, segment2: Shape.Segment) {
   const [x1, y1] = segment1[0].raw;
   const [x2, y2] = segment1[1].raw;
   const [x3, y3] = segment2[0].raw;
@@ -53,7 +53,7 @@ export function segmentWithSegmentIntersection(segment1: Segment, segment2: Segm
   }
 }
 
-export function lineWithDiretionIntersection(pivot: Vector, direction: Vector, segment: Segment) {
+export function lineWithDiretionIntersection(pivot: Vector, direction: Vector, segment: Shape.Segment) {
   const [x1, y1] = segment[0].raw;
   const [x2, y2] = segment[1].raw;
   const [x3, y3] = pivot.raw;

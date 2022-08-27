@@ -2,7 +2,7 @@ import { LightSource } from "../components";
 import { Rectangle } from "../shapes";
 import { Ray, ShapeRayResolution } from "./ray";
 import { Scene } from "./scene";
-import { Segment, Shape, ShapeIntersection } from "./shape";
+import { Shape } from "./shape";
 import { Transform } from "./transform";
 import { Vector } from "./vector";
 
@@ -12,7 +12,7 @@ export interface StableCheckpointRaycast {
 
 export interface ReflectiveCheckpointRaycast extends StableCheckpointRaycast {
   readonly endpoint: Vector;
-  readonly endpointSegment: Segment;
+  readonly endpointSegment: Shape.Segment;
 }
 
 export type CheckpointRaycast = StableCheckpointRaycast & Partial<ReflectiveCheckpointRaycast>;
@@ -63,17 +63,17 @@ export class VisibilityPolygon {
 
   public readonly externalMaskBounds: Shape;
   public readonly visibleObsticles: Shape[];
-  public readonly visibleObsticleSegments: Segment[]; 
+  public readonly visibleObsticleSegments: Shape.Segment[]; 
   public readonly checkpointVertices: Vector[] = []; // Needed directly definition from outside (effect)
   public readonly checkpointRaycasts: CheckpointRaycast[] = [];
 
-  public readonly obsticlesWithBoundsIntersections: ShapeIntersection[];
+  public readonly obsticlesWithBoundsIntersections: Shape.SegmentIntersection[];
   public readonly obsticlesWithBoundsInterimVertices: Vector[];
 
-  public readonly obsticlesWithObsticlesIntersections: ShapeIntersection[] = [];
+  public readonly obsticlesWithObsticlesIntersections: Shape.SegmentIntersection[] = [];
   public readonly obsticlesWithObsticlesInterimVertices: Vector[];
 
-  public readonly intersections: ShapeIntersection[] = [];
+  public readonly intersections: Shape.SegmentIntersection[] = [];
 
   private constructor(options: VisibilityPolygonCreationOptions) {
     const { fulcrum, obsticles, skipObsticleCulling, externalMasks } = options;
@@ -91,12 +91,12 @@ export class VisibilityPolygon {
     this.pathCreator = new VisibilityPolygon.PathCreator(this.segmentShareMap);
     
     // Bound calculations
-    this.obsticlesWithBoundsIntersections = this.visibleObsticles.map(obsticle => Shape.intersections(this.externalMaskBounds, obsticle)).flat();
+    this.obsticlesWithBoundsIntersections = this.visibleObsticles.map(obsticle => Shape.segmentIntersections(this.externalMaskBounds, obsticle)).flat();
     this.obsticlesWithBoundsInterimVertices = this.obsticlesWithBoundsIntersections.map(intersection => intersection.position);
     
     for (let i = 0; i < this.visibleObsticles.length; i++) {
       for (let j = i + 1; j < this.visibleObsticles.length; j++) {
-        const intersection = Shape.intersections(this.visibleObsticles[i], this.visibleObsticles[j]);
+        const intersection = Shape.segmentIntersections(this.visibleObsticles[i], this.visibleObsticles[j]);
         if (!intersection) {
           continue;
         }
@@ -290,7 +290,7 @@ export class VisibilityPolygon {
       return stableRaycastCheckpoint;
     }
 
-    const checkpointVertexSegments: Segment[] = [];
+    const checkpointVertexSegments: Shape.Segment[] = [];
     for (const [segment, segmentVertices] of this.segmentShareMap) {
       if (segmentVertices.includes(checkpointVertex)) {
         checkpointVertexSegments.push(segment);
@@ -335,7 +335,7 @@ export class VisibilityPolygon {
   }
 
   public static obsticleCulling(obsticles: Shape[], maskBounds: Shape) {
-    return obsticles.filter(obsticle => VisibilityPolygon.shapeOverlapsVisibilityBounds(obsticle, maskBounds))
+    return obsticles.filter(maskBounds.overlaps);
   }
 
   public static getOverlapsShape(fulcrum: Vector, shapes: Shape[]) {
@@ -344,25 +344,18 @@ export class VisibilityPolygon {
     return escapeRayOpenStack.size !== 0;
   }
 
-  public static shapeOverlapsVisibilityBounds(shape: Shape, bounds: Shape) {
-    const sv = shape.bounds.vertices;
-    const bv = bounds.vertices;
-  
-    return sv[1].x > bv[0].x && sv[0].x < bv[1].x && sv[0].y > bv[3].y && sv[3].y < bv[0].y;
-  }
-
   private static bounds(fulcrum: Vector, range: number) {
     const scale = Vector.one.multiply(range);
     const boundsTransform = Transform.setScale(scale).setPosition(fulcrum);
     return new Rectangle().withTransform(boundsTransform);
   }
 
-  public static SegmentShareMap = class VisibilityPolygonSegmentShareMap extends Map<Segment, Vector[]> {
-    constructor(...segments: Segment[]) {
+  public static SegmentShareMap = class VisibilityPolygonSegmentShareMap extends Map<Shape.Segment, Vector[]> {
+    constructor(...segments: Shape.Segment[]) {
       super(segments.map((segment => [segment, [...segment]])))
     }
 
-    add(segment: Segment, ...vertices: Vector[]) {
+    add(segment: Shape.Segment, ...vertices: Vector[]) {
       const requiredVertices = vertices.length === 0 ? [...segment] : vertices;
       const existingVertices = this.get(segment);
 
@@ -375,7 +368,7 @@ export class VisibilityPolygon {
       return this;
     }
 
-    addHolders(vertex: Vector, holders: [Segment, Segment] | readonly [Segment, Segment]) {
+    addHolders(vertex: Vector, holders: Shape.SegmentIntersection['segmentHolders']) {
       for (const holder of holders) {
         this.add(holder, vertex);
       }
@@ -459,7 +452,7 @@ export class VisibilityPolygon {
     return { exposed };
   }
 
-  private static createReflectiveRaycastCheckpoint(exposed: Vector, endpoint: Vector, endpointSegment: Segment) {
+  private static createReflectiveRaycastCheckpoint(exposed: Vector, endpoint: Vector, endpointSegment: Shape.Segment) {
     return { exposed, endpoint, endpointSegment };
   }
 }

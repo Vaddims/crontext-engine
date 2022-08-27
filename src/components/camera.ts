@@ -1,4 +1,4 @@
-import { Component } from "../core";
+import { Component, Renderer, Scene, Shape, Transform } from "../core";
 import { Color } from "../core/color";
 import { Optic } from "../core/optic";
 import { SimulationRenderer } from "../renderers/simulation-renderer";
@@ -8,6 +8,8 @@ import { MeshRenderer } from "./mesh-renderer";
 import { LightSource } from "./light";
 import { PointLight } from "./light-sources/point-light";
 import { Layer } from "../core/layer";
+import { Gizmos } from "../core/gizmos";
+import { Rectangle } from "../shapes";
 
 export class Camera extends Component {
   public SimulationRenderingPipeline: SimulationRenderingPipelineConstuctor = SimulationRenderingPipeline;
@@ -45,6 +47,23 @@ export class Camera extends Component {
     
     context.restore();
   }
+
+  public gizmosRender(gizmos: Gizmos) {
+    const bounds = this.getBounds(gizmos.renderer);
+    gizmos.highlightVertices(bounds.vertices, Color.blue);
+
+    for (const entity of gizmos.renderer.simulation.scene) {
+      const vertices = entity.components.find(MeshRenderer)?.relativeVerticesPosition();
+      if (!vertices) {
+        continue;
+      }
+
+      const positionedShape = new Shape(vertices);
+      if (positionedShape.overlaps(bounds)) {
+        gizmos.highlightVertices(positionedShape.vertices, Color.red);
+      }
+    }
+  }
   
   protected renderScene(renderer: SimulationRenderer, renderingPipelineInstance: SimulationRenderingPipeline) {
     const { scene } = renderer.simulation;
@@ -61,6 +80,13 @@ export class Camera extends Component {
 
       renderingPipelineInstance.renderEntityMesh(meshRenderer);
     }
+  }
+
+  public getBounds(renderer: Renderer) {
+    const { unitFit, pixelRatio } = renderer;
+    const boundaryScale = Vector.one.multiply(unitFit, pixelRatio, this.transform.scale);
+    const boundary = new Rectangle().withTransform(this.transform.toPureTransform().setScale(boundaryScale));
+    return boundary;
   }
 
   protected renderSceneLight(renderer: SimulationRenderer, renderingPipelineInstance: SimulationRenderingPipeline) {

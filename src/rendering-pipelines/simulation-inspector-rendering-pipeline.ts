@@ -14,23 +14,6 @@ import { rotatedOffsetPosition } from "../utils/crontext-math";
 import { Triangle } from "../shapes/triangle";
 
 export class SimulationInspectorRenderingPipeline extends SimulationRenderingPipeline<SimulationInspectorRenderer> {
-  renderCameraViewport(camera: Camera) {
-    const { position } = camera.transform;
-    const cameraOptic = camera.toOptic();
-    cameraOptic.pixelsPerUnit = this.optic.pixelsPerUnit;
-    
-    const renderingPosition = this.getRenderingPosition(position);
-    const { unitFit } = this.renderer;
-    const boundaryScale = Vector.one.multiply(unitFit, this.renderer.pixelRatio, cameraOptic.scale);
-    const boundary = new Rectangle().withTransform(Transform.setScale(boundaryScale).setRotation(cameraOptic.rotation));
-    this.context.save();
-    this.context.translate(...renderingPosition.raw);
-    this.defineShapePath(boundary);
-    this.context.strokeStyle = Color.blue.toString();
-    this.context.stroke();
-    this.context.restore();
-  }
-
   renderMeshMarkup(canvasSize: Vector) {
     const { context } = this;
     const divider = 10 ** (Math.ceil(Math.log10(this.optic.scale.x) - .5));
