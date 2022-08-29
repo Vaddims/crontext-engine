@@ -26,7 +26,9 @@ export class Simulation {
 
   public start() {
     this.running = true;
-    const entities = this.activeScene.getAllEntities();
+    this.activeScene.update();
+
+    const entities = this.activeScene.getEntities();
     for (const entity of entities) {
       for (const component of entity.components) {
         component.start?.();
@@ -43,7 +45,9 @@ export class Simulation {
       return;
     }
     
-    const entities = this.activeScene.getAllEntities();
+    this.scene.update();
+
+    const entities = Array.from(this.activeScene);
     const entityInitialPositionMap = new Map<Entity, Vector>();
     
     for (const entity of entities) {

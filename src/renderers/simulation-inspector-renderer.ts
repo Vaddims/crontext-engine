@@ -92,7 +92,7 @@ export class SimulationInspectorRenderer extends Renderer {
 
     renderingPipeline.renderMeshMarkup(this.canvasSize);
     
-    const visibleEntities = scene.getAllEntities(); // TODO REWORK WITH RENDERING LAYERS
+    const visibleEntities = scene.getEntities(); // TODO REWORK WITH RENDERING LAYERS
     
     for (const entity of visibleEntities) {
       const meshRenderer = entity.components.find(MeshRenderer);

@@ -89,7 +89,7 @@ export class PlaneCollider extends Collider {
   }
 
   gizmosRender(gizmos: Gizmos) {
-    const colliders = this.entity.getScene().getAllComponentsOfType(CircleCollider);
+    const colliders = this.entity.scene!.getComponentsOfType(CircleCollider);
     for (const collider of colliders) {
       const vector = this.closestPointToPoint(collider.position);
       gizmos.renderLine(collider.position, vector, Color.red);

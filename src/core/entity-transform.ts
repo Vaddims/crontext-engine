@@ -88,7 +88,7 @@ export class EntityTransform {
   }
   
   public get parentTransform(): EntityTransform | null {
-    return this.entity.tryGetParent()?.transform ?? null;
+    return this.entity.parent?.transform ?? null;
   }
 
   public translate(dPosition: Vector, space = Space.global) {

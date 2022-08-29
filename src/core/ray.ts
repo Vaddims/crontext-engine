@@ -50,7 +50,7 @@ export class Ray {
   cast(input: Scene | Shape[] | readonly Shape[], options?: RayCastOptions) {
     if (input instanceof Scene) {
       const entityShapeMap = new Map<Shape, Entity>();
-      for (const entity of input.getAllEntities()) {
+      for (const entity of input) {
         const shape = this.entityShapeDriller(entity);
         if (!shape) {
           continue;
@@ -85,7 +85,7 @@ export class Ray {
   research(input: Scene | Shape[] | readonly Shape[], options: RayResearchOptions = {}) {
     if (input instanceof Scene) {
       const entityShapeMap = new Map<Shape, Entity>();
-      for (const entity of input.getAllEntities()) {
+      for (const entity of input.getEntities()) {
         const shape = this.entityShapeDriller(entity);
         if (!shape) {
           continue;

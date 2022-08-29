@@ -97,7 +97,7 @@ export class SpotLight extends LightSource {
   }
 
   private getEntityShapes(lightBounds: Shape) {
-    const scene = this.entity.getScene();
+    const scene = this.entity.scene!;
 
     const entityShapes: Shape[] = [];
     for (const entity of scene) {

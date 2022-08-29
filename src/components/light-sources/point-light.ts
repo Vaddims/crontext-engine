@@ -138,7 +138,7 @@ export class PointLight extends LightSource {
       return this.visibilityPolygonCache;
     }
     
-    const scene = this.entity.getScene();
+    const scene = this.entity.scene!;
     const entityShapes = this.getEntityShapes(scene);
     const lightBounds = this.getBounds();
     const visibilityPolygon = VisibilityPolygon.createPanorama({

@@ -8,7 +8,7 @@ export * from './vector';
 export * from './rendering-pipeline';
 export * from './scene';
 export * from './shape';
-export * from './simulation-node';
+export * from './scene-event-request-system';
 export * from './space';
 export * from './transform';
 export * from './ray'

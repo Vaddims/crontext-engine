@@ -58,10 +58,10 @@ export class Camera extends Component {
         continue;
       }
 
-      const positionedShape = new Shape(vertices);
-      if (positionedShape.overlaps(bounds)) {
-        gizmos.highlightVertices(positionedShape.vertices, Color.red);
-      }
+      // const positionedShape = new Shape(vertices);
+      // if (positionedShape.overlaps(bounds)) {
+      //   gizmos.highlightVertices(positionedShape.vertices, Color.red);
+      // }
     }
   }
   
@@ -92,7 +92,7 @@ export class Camera extends Component {
   protected renderSceneLight(renderer: SimulationRenderer, renderingPipelineInstance: SimulationRenderingPipeline) {
     const { scene } = renderer.simulation;
 
-    for (const lightSource of scene.getAllComponentsOfType(LightSource)) {
+    for (const lightSource of scene.getComponentsOfType(LightSource)) {
       lightSource.render(renderingPipelineInstance);
     }
   }

@@ -1,46 +1,36 @@
-import { SimulationNode } from "./simulation-node";
+import { SceneEventRequestSystem } from "./scene-event-request-system";
 import { Component, ComponentConstructor } from "./component";
 import { Entity } from "./entity";
 
-export class Scene extends SimulationNode {
+export class Scene extends SceneEventRequestSystem implements Iterable<Entity> {
   public name = 'Scene';
 
-  [Symbol.iterator]() {
-    return this.children.values();
+  private readonly hoistedEntities = new Set<Entity>();
+  private readonly entityInstances = new Set<Entity>();
+  private readonly instantiationRequests = new Set<Entity>();
+
+  public [Symbol.iterator]() {
+    return this.entityInstances.values();
   }
 
-  public instantiate(...entities: Entity[]) {
-    for (const entity of entities) {
-      entity.setParent(this);
-      this.children.add(entity);
-    }
+  public getHoistedEntities() {
+    return [...this.hoistedEntities];
   }
 
-  public getAllEntities() {
-		const entities: Entity[] = [];
-		function itirate(entity: Entity) {
-			entities.push(entity);
-			for (const child of entity.getChildren()) {
-        itirate(child);
-      }
-		}
-
-		for (const entity of this.children) {
-      itirate(entity);
-    }
-
-    return entities;
+  public getEntities() {
+    return [...this];
+  }
+  
+  public instantiate(entity: Entity) {
+    entity['createInstantiationEventRequest'](this);
+    this.instantiationRequests.add(entity);
   }
 
   public find(name: string) {
-    for (const entity of this.getAllEntities()) {
-      if (entity.name === name) {
-        return entity;
-      }
-    }
+    return this.getEntities().find(entity => entity.name === name);
   }
 
-  public getAllComponents() {
+  public getComponents() {
     const components: Component[] = [];
     function parseEntity(entity: Entity) {
       for (const component of entity.components) {
@@ -53,16 +43,16 @@ export class Scene extends SimulationNode {
       }
     }
 
-    for (const child of this.children) {
+    for (const child of this.hoistedEntities) {
       parseEntity(child);
     }
     
     return components;
   }
 
-  public getAllComponentsOfType<T extends ComponentConstructor>(type: T) {
+  public getComponentsOfType<T extends ComponentConstructor>(type: T) {
     type Instance = InstanceType<T>;
-    const components = this.getAllComponents();
+    const components = this.getComponents();
     const targets: Instance[] = [];
     for (const component of components) {
       if (component instanceof type) {
@@ -72,4 +62,79 @@ export class Scene extends SimulationNode {
     
     return targets;
   }
+
+  public update() {
+    const entities = [...this.entityInstances, ...this.instantiationRequests];
+    for (const entity of entities) {
+      const entityEventResolutions = this.getEventRequestsOf(entity);
+      for (const eventResolution of entityEventResolutions) {
+        this.eventRequests.set(...eventResolution);
+      }
+      
+      entityEventResolutions.clear();
+    }
+    
+    for (const [event, resolveEvent] of this.eventRequests) {
+      this.handleEventResolution(event);
+      resolveEvent();
+    }
+
+    this.eventRequests.clear();
+    this.instantiationRequests.clear();
+  }
+
+  private handleEventResolution(event: Scene.Event) {
+    switch(event.type) {
+      case Scene.Event.Types.EntityInstatiation:
+        this.hoistedEntities.add(event.target);
+        this.entityInstances.add(event.target);
+        break;
+
+      case Scene.Event.Types.EntityTransfer:
+        if (event.target)
+
+        break;
+      
+      case Scene.Event.Types.EntityDestruction:
+        this.entityInstances.delete(event.target);
+        break;
+    }
+  }
+}
+
+export namespace Scene {
+  export interface EntityCache {
+    readonly parent: Entity | null;
+    readonly children: Entity[];
+  }
+
+  export namespace Event {
+    export enum Types {
+      EntityInstatiation,
+      EntityTransfer,
+      EntityDestruction,
+    }
+
+    interface EntityEvent<T extends Types> {
+      readonly type: T;
+      readonly target: Entity;
+    }
+  
+    export interface EntityInstantiationEvent extends EntityEvent<Types.EntityInstatiation> {
+      readonly parent?: Entity;
+    }
+    
+    export interface EntityTransferEvent extends EntityEvent<Types.EntityTransfer> {
+      readonly parent: Entity | null;
+    }
+    
+    export interface EntityDestructionEvent extends EntityEvent<Types.EntityDestruction> {}
+  }
+
+  export type Event = 
+    | Event.EntityInstantiationEvent 
+    | Event.EntityTransferEvent 
+    | Event.EntityDestructionEvent;
+
+  
 }

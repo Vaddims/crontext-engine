@@ -1,66 +1,111 @@
-import { SimulationNode } from "./simulation-node";
+import { SceneEventRequestSystem } from "./scene-event-request-system";
 import { EntityTransform } from "./entity-transform";
 import { Scene } from "./scene";
 import { EntityComponentSystem } from "./systems/entity-component-system";
 import { EntityLayerSystem } from "./systems/entity-layer-system";
 
-export class Entity extends SimulationNode {
+export class Entity extends SceneEventRequestSystem {
   public name = "Entity";
+  
+  private parentScene: Scene | null = null;
+  private parentEntity: Entity | null = null;
 
-  protected readonly children = new Set<Entity>();
   public readonly components = new EntityComponentSystem(this);
   public readonly transform = new EntityTransform(this);
   public readonly layers = new EntityLayerSystem();
+  protected readonly children = new Set<Entity>();
 
-  public setParent(parent: SimulationNode) {
-    const currentParent = this.tryGetParent();
-    if (currentParent) {
-      currentParent.children.delete(this);
-    }
+  public get scene() {
+    return this.parentScene;
+  }
 
-    this.parentNode = parent;
-    if (parent instanceof Entity) {
-      parent.children.add(this);
-    }
+  public get parent() {
+    return this.parentEntity;
+  }
+
+  public get isHoisted() { // Hoisted in scene (top level entity)
+    return this.scene && !this.parent;
   }
 
   public getChildren() {
-    return Array.from(this.children);
+    return [...this.children];
   }
 
-  public tryGetScene() {
-    const topNode = this.getTopNode();
-    if (topNode instanceof Scene) {
-      return topNode;
+  public async setParent(parent: Entity) {
+    if (this.scene) {
+      await this.createTransferEventRequest(parent);
+    } else {
+      this.setParentLocally(parent);
     }
-
-    return null;
   }
 
-  public tryGetParent() {
-    const parent = this.parentNode;
-    if (parent !== null && parent instanceof Entity) {
-      return parent;
+  public async destroy() {
+    if (this.scene) {
+      await this.createDestructionEventRequest();
+    } else {
+      this.destroyLocally();
     }
-
-    return null;
   }
 
-  public getScene() {
-    const scene = this.tryGetScene();
-    if (!scene) {
-      throw new Error(`Entity \`${this.name}\` does not have a parent scene`);
-    }
-
-    return scene;
+  private requestEventResolve(event: Scene.Event, resolver: Function) {
+    return new Promise<void>((resolve) => {
+      this.eventRequests.set(event, () => {
+        resolver();
+        resolve(void 0);
+      });
+    });
   }
 
-  public getParent() {
-    const entity = this.tryGetParent();
-    if (!entity) {
-      throw new Error(`Entity \`${this.name}\` does not have a parent entity`);
+  private setParentLocally(parent: Entity | null) {
+    this.parentEntity = parent;
+  }
+
+  private async createInstantiationEventRequest(scene: Scene) {
+    const event: Scene.Event.EntityInstantiationEvent = {
+      type: Scene.Event.Types.EntityInstatiation,
+      target: this,
+    };
+
+    const resolver = () => {
+      this.parentScene = scene;
     }
 
-    return entity;
+    return this.requestEventResolve(event, resolver);
+  }
+
+  private async createTransferEventRequest(newParent: Entity) {
+    const event: Scene.Event.EntityTransferEvent = {
+      type: Scene.Event.Types.EntityTransfer,
+      target: this,
+      parent: newParent,
+    };
+
+    const resolver = () => {
+      this.parent?.children.delete(this);
+      this.parentEntity = newParent;
+      newParent.children.add(this);
+    }
+
+    return this.requestEventResolve(event, resolver);
+  }
+
+  private async createDestructionEventRequest() {
+    const event: Scene.Event.EntityDestructionEvent = {
+      type: Scene.Event.Types.EntityDestruction,
+      target: this,
+    };
+
+    const resolver = () => {
+      this.parent?.children.delete(this);
+      this.parentEntity = null;
+      this.parentScene = null;
+    }
+
+    return this.requestEventResolve(event, resolver);
+  }
+
+  private destroyLocally() {
+    this.parent?.children.delete(this);
+    this.parentEntity = null;
   }
 }

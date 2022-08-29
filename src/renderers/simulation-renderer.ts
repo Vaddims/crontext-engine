@@ -20,7 +20,7 @@ export class SimulationRenderer extends Renderer {
     context.closePath();
     context.clip();
 
-    for (const camera of scene.getAllComponentsOfType(Camera)) {
+    for (const camera of scene.getComponentsOfType(Camera)) {
       camera.render(this);
     }
 
