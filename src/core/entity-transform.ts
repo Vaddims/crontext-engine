@@ -20,7 +20,7 @@ export class EntityTransform {
   }
 
   public set position(vector) {
-    this.globalPosition = vector.duplicate();
+    this.globalPosition = vector;
     this.updateRelativeLocalPosition();
   }
 
@@ -29,7 +29,7 @@ export class EntityTransform {
   }
 
   public set scale(vector) {
-    this.globalScale = vector.duplicate();
+    this.globalScale = vector;
     this.updateRelativeLocalScale();
   }
 
@@ -40,7 +40,7 @@ export class EntityTransform {
   public set rotation(radians) {
     this.globalRotation = radians;
     this.updateRelativeLocalRotation();
-    this.updateRelativePosition();
+    this.updateRelativeLocalPosition();
   }
 
   public get angleRotation() {
@@ -125,30 +125,30 @@ export class EntityTransform {
     }
   }
 
-  public getRelativePosition() {
+  private getRelativePosition() {
     const parentTransform = this.parentTransform;
     const parentPosition = parentTransform?.position ?? Vector.zero;
     const parentScale = parentTransform?.scale ?? Vector.one;
     const parentRotation = parentTransform?.rotation ?? 0;
 
     const localPosition = rotatedOffsetPosition(this.dependedPosition, parentRotation);
-    const position = parentPosition.add(localPosition).multiply(parentScale);
+    const position = parentPosition.add(localPosition.multiply(parentScale));
     return position;
   }
 
-  public getRelativeScale() {
+  private getRelativeScale() {
     const parentScale = this.parentTransform?.scale ?? Vector.one;
     const globalScale = this.dependedScale.multiply(parentScale);
     return globalScale;
   }
 
-  public getRelativeRotation() {
+  private getRelativeRotation() {
     const parentRotation = this.parentTransform?.rotation ?? 0;
     const globalRotation = this.dependedRotation + parentRotation;
     return globalRotation;
   }
 
-  public getRelativeLocalPosition() {
+  private getRelativeLocalPosition() {
     const parentTransform = this.parentTransform;
     const parentPosition = parentTransform?.position ?? Vector.zero;
     const parentScale = parentTransform?.scale ?? Vector.one;
@@ -164,68 +164,92 @@ export class EntityTransform {
     return localPosition;
   }
 
-  public getRelativeLocalScale() {
+  private getRelativeLocalScale() {
     const parentScale = this.parentTransform?.scale ?? Vector.one;
     const localScale = this.globalScale.divide(parentScale);
     return localScale;
   }
 
-  public getRelativeLocalRotation() {
+  private getRelativeLocalRotation() {
     const parentRotation = this.parentTransform?.rotation ?? 0;
     const localRotation = this.globalRotation - parentRotation;
     return localRotation;
   }
 
-  public updateRelativePosition() {
+  private updateRelativePosition(preventProganation = false) {
     this.globalPosition = this.getRelativePosition();
-    this.proganateTransformUpdate(this.updateRelativePosition);
-  }
 
-  public updateRelativeScale() {
-    this.globalScale = this.getRelativeScale();
-    this.proganateTransformUpdate(this.updateRelativeScale);
-  }
-
-  public updateRelativeRotation() {
-    this.globalRotation = this.getRelativeRotation();
-    this.proganateTransformUpdate(this.updateRelativeRotation);
-  }
-
-  public updateRelativeLocalPosition() {
-    this.localPosition = this.getRelativeLocalPosition();
-    this.proganateTransformUpdate(this.updateRelativeLocalPosition);
-  }
-
-  public updateRelativeLocalScale() {
-    this.localScale = this.getRelativeLocalScale();
-    this.proganateTransformUpdate(this.updateRelativeLocalScale);
-  }
-
-  public updateRelativeLocalRotation() {
-    this.localRotation = this.getRelativeLocalRotation();
-    this.proganateTransformUpdate(this.updateRelativeLocalRotation);
-  }
-
-  public updateRelativeTransform() {
-    this.updateRelativeRotation();
-    this.updateRelativeScale();
-    this.updateRelativePosition();
-  }
-
-  public updateRelativeLocalTransform() {
-    this.updateRelativeLocalRotation();
-    this.updateRelativeLocalScale();
-    this.updateRelativeLocalPosition();
-  }
-
-  private proganateTransformUpdate(callback: Function) {
-    const entities = this.entity.getChildren();
-    for (const entity of entities) {
-      callback.call(entity.transform);
+    if (!preventProganation)
+    for (const entity of this.entity.getChildren()) {
+      entity.transform.updateRelativePosition();
     }
   }
 
-  toPureTransform() {
+  private updateRelativeScale(preventProganation = false) {
+    this.globalScale = this.getRelativeScale();
+
+    if (!preventProganation)
+    for (const entity of this.entity.getChildren()) {
+      entity.transform.updateRelativeScale();
+    }
+  }
+
+  private updateRelativeRotation(preventProganation = false) {
+    this.globalRotation = this.getRelativeRotation();
+
+    if (!preventProganation)
+    for (const entity of this.entity.getChildren()) {
+      entity.transform.updateRelativeRotation();
+    }
+  }
+
+  private updateRelativeLocalPosition(preventProganation = false) {
+    this.localPosition = this.getRelativeLocalPosition();
+
+    if (!preventProganation)
+    for (const entity of this.entity.getChildren()) {
+      entity.transform.updateRelativeLocalPosition();
+    }
+  }
+
+  private updateRelativeLocalScale(preventProganation = false) {
+    this.localScale = this.getRelativeLocalScale();
+
+    if (!preventProganation)
+    for (const entity of this.entity.getChildren()) {
+      entity.transform.updateRelativeLocalScale();
+    }
+  }
+
+  private updateRelativeLocalRotation(preventProganation = false) {
+    this.localRotation = this.getRelativeLocalRotation();
+
+    if (!preventProganation) for (const entity of this.entity.getChildren()) {
+      entity.transform.updateRelativeLocalRotation();
+    }
+  }
+
+  public updateRelativeTransform() {
+    this.updateRelativeRotation(true);
+    this.updateRelativeScale(true);
+    this.updateRelativePosition(true);
+
+    for (const entity of this.entity.getChildren()) {
+      entity.transform.updateRelativeTransform();
+    }
+  }
+
+  public updateRelativeLocalTransform() {
+    this.updateRelativeLocalPosition(true);
+    this.updateRelativeLocalRotation(true);
+    this.updateRelativeLocalScale(true);
+
+    for (const entity of this.entity.getChildren()) {
+      entity.transform.updateRelativeLocalTransform();
+    }
+  }
+
+  public toPureTransform() {
     const transform = new Transform(this.position, this.scale, this.rotation);
     return transform;
   }

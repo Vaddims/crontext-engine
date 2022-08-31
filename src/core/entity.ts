@@ -31,20 +31,12 @@ export class Entity extends SceneEventRequestSystem {
     return [...this.children];
   }
 
-  public async setParent(parent: Entity) {
-    if (this.scene) {
-      await this.createTransferEventRequest(parent);
-    } else {
-      this.setParentLocally(parent);
-    }
+  public async setParent(parent: Entity | null) {
+    this.createTransferEventRequest(parent);
   }
 
   public async destroy() {
-    if (this.scene) {
-      await this.createDestructionEventRequest();
-    } else {
-      this.destroyLocally();
-    }
+    await this.createDestructionEventRequest();
   }
 
   private requestEventResolve(event: Scene.Event, resolver: Function) {
@@ -73,7 +65,8 @@ export class Entity extends SceneEventRequestSystem {
     return this.requestEventResolve(event, resolver);
   }
 
-  private async createTransferEventRequest(newParent: Entity) {
+  private async createTransferEventRequest(newParent: Entity | null) {
+    const initialPosition = this.transform.position;
     const event: Scene.Event.EntityTransferEvent = {
       type: Scene.Event.Types.EntityTransfer,
       target: this,
@@ -83,7 +76,13 @@ export class Entity extends SceneEventRequestSystem {
     const resolver = () => {
       this.parent?.children.delete(this);
       this.parentEntity = newParent;
-      newParent.children.add(this);
+
+      if (newParent) {
+        newParent.children.add(this);
+      }
+      
+      this.transform.position = this.transform.position;
+      this.transform.updateRelativeLocalTransform();
     }
 
     return this.requestEventResolve(event, resolver);

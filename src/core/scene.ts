@@ -26,6 +26,10 @@ export class Scene extends SceneEventRequestSystem implements Iterable<Entity> {
     this.instantiationRequests.add(entity);
   }
 
+  public isEntityAwaitingInstantiation(entity: Entity) {
+    return this.instantiationRequests.has(entity);
+  }
+
   public find(name: string) {
     return this.getEntities().find(entity => entity.name === name);
   }
@@ -91,7 +95,11 @@ export class Scene extends SceneEventRequestSystem implements Iterable<Entity> {
         break;
 
       case Scene.Event.Types.EntityTransfer:
-        if (event.target)
+        if (event.target.parent !== null && event.parent === null) {
+          this.hoistedEntities.add(event.target);
+        } else if (event.target.parent === null) {
+          this.hoistedEntities.delete(event.target);
+        }
 
         break;
       
@@ -135,6 +143,4 @@ export namespace Scene {
     | Event.EntityInstantiationEvent 
     | Event.EntityTransferEvent 
     | Event.EntityDestructionEvent;
-
-  
 }
