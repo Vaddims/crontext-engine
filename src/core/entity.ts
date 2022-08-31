@@ -15,6 +15,10 @@ export class Entity extends SceneEventRequestSystem {
   public readonly layers = new EntityLayerSystem();
   protected readonly children = new Set<Entity>();
 
+  public [Symbol.toPrimitive]() {
+    return `Entity(${this.name})`;
+  }
+
   public get scene() {
     return this.parentScene;
   }
@@ -39,12 +43,25 @@ export class Entity extends SceneEventRequestSystem {
     await this.createDestructionEventRequest();
   }
 
-  private requestEventResolve(event: Scene.Event, resolver: Function) {
+  private requestEventResolve(event: Scene.Event, eventResolver: Function) {
     return new Promise<void>((resolve) => {
-      this.eventRequests.set(event, () => {
-        resolver();
-        resolve(void 0);
-      });
+      const a = (<Scene.Event.EntityTransferEvent>event).parent;
+      const registerRequest = () => {
+        this.eventRequests.set(event, () => {
+          eventResolver();
+          resolve(void 0);
+        });
+      }
+
+      for (const [registeredEvent] of this.eventRequests) {
+        if (registeredEvent.type === event.type && registeredEvent.target === event.target) {
+          this.eventRequests.delete(registeredEvent)
+          registerRequest();
+          return;
+        }
+      }
+
+      registerRequest();
     });
   }
 

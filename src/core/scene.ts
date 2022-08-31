@@ -111,16 +111,11 @@ export class Scene extends SceneEventRequestSystem implements Iterable<Entity> {
 }
 
 export namespace Scene {
-  export interface EntityCache {
-    readonly parent: Entity | null;
-    readonly children: Entity[];
-  }
-
   export namespace Event {
     export enum Types {
-      EntityInstatiation,
-      EntityTransfer,
-      EntityDestruction,
+      EntityInstatiation = 'EntityInstantiation',
+      EntityTransfer = 'EntityTransfer',
+      EntityDestruction = 'EntityDestruction',
     }
 
     interface EntityEvent<T extends Types> {
