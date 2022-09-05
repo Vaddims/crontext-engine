@@ -1,6 +1,7 @@
 import { Color, Entity, Optic, Ray, Renderer, RenderingPipeline, Scene, Shape, Transform, Vector } from "../../core";
 import { Gizmos } from "../../core/gizmos";
 import { VisibilityPolygon } from "../../core/visibility-polygon";
+import { PanoramaVisibilityPolygon } from "../../core/visibility-polygons/panorama-visibility-polygon";
 import { SimulationRenderer } from "../../renderers";
 import { SimulationRenderingPipeline } from "../../rendering-pipelines";
 import { Rectangle } from "../../shapes";
@@ -38,9 +39,8 @@ export class PointLight extends LightSource {
   }
 
   render(simulationRenderingPipeline: SimulationRenderingPipeline) {
-    const { renderer } = simulationRenderingPipeline;
-    const visibilityPolygon = this.getVisibilityPolygon(renderer);
-    const { path } = visibilityPolygon.pathCreator;
+    const visibilityPolygon = this.getVisibilityPolygon();
+    const { path } = visibilityPolygon;
 
     const { remove: removeMask } = simulationRenderingPipeline.createMask(path);
 
@@ -64,8 +64,8 @@ export class PointLight extends LightSource {
 
 
   gizmosRender(gizmos: Gizmos) {
-    const visibilityPolygon = this.getVisibilityPolygon(gizmos.renderer);
-    const { path } = visibilityPolygon.pathCreator;
+    const visibilityPolygon = this.getVisibilityPolygon();
+    const { path } = visibilityPolygon;
     
     const lineColor = new Color(0, 0, 255, 0.1);
     const vertexColor = Color.blue;
@@ -133,7 +133,7 @@ export class PointLight extends LightSource {
     return escapeRayOpenStack.size !== 0;
   }
 
-  private getVisibilityPolygon(renderer: SimulationRenderer) {
+  private getVisibilityPolygon() {
     if (this.visibilityPolygonCache) {
       return this.visibilityPolygonCache;
     }
@@ -141,12 +141,12 @@ export class PointLight extends LightSource {
     const scene = this.entity.scene!;
     const entityShapes = this.getEntityShapes(scene);
     const lightBounds = this.getBounds();
-    const visibilityPolygon = VisibilityPolygon.createPanorama({
+    const panoramaVisibilityPolygon = new PanoramaVisibilityPolygon({
       fulcrum: this.transform.position,
       obsticles: entityShapes,
       externalMasks: [lightBounds],
     });
 
-    return this.visibilityPolygonCache = visibilityPolygon;
+    return this.visibilityPolygonCache = panoramaVisibilityPolygon;
   }
 }

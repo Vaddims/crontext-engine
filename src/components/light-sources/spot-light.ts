@@ -1,6 +1,7 @@
 import { Color, Ray, Shape, Transform, Vector } from "../../core";
 import { Gizmos } from "../../core/gizmos";
 import { VisibilityPolygon } from "../../core/visibility-polygon";
+import { SectorVisibilityPolygon } from "../../core/visibility-polygons/sector-visibility-polygon";
 import { SimulationRenderer } from "../../renderers";
 import { SimulationRenderingPipeline } from "../../rendering-pipelines";
 import { Rectangle } from "../../shapes";
@@ -33,7 +34,7 @@ export class SpotLight extends LightSource {
     const { renderer } = simulationRenderingPipeline;
     const visibilityPolygon = this.getVisibilityPolygon(renderer);
 
-    const { remove: removeMask } = simulationRenderingPipeline.createMask(visibilityPolygon.pathCreator.path);
+    const { remove: removeMask } = simulationRenderingPipeline.createMask(visibilityPolygon.path);
 
     simulationRenderingPipeline.renderRadialGradient(this.transform.position, this.range, [{
       offset: 0,
@@ -48,7 +49,7 @@ export class SpotLight extends LightSource {
 
   gizmosRender(gizmos: Gizmos) {
     const visibilityPolygon = this.getVisibilityPolygon(gizmos.renderer);
-    const { path } = visibilityPolygon.pathCreator;
+    const { path } = visibilityPolygon;
     
     const lineColor = new Color(0, 0, 255, 0.1);
 
@@ -159,7 +160,7 @@ export class SpotLight extends LightSource {
     const lightBounds = this.getBounds();    
     const entityShapes = this.getEntityShapes(lightBounds);
 
-    return VisibilityPolygon.createSector({
+    return new SectorVisibilityPolygon({
       direction: Vector.fromAngle(this.direction.rotation() + this.transform.rotation),
       angle: this.angle,
       nearPlane: this.nearPlane,

@@ -1,9 +1,5 @@
-import { LightSource } from "../components";
-import { Rectangle } from "../shapes";
-import { Ray, ShapeRayResolution } from "./ray";
-import { Scene } from "./scene";
+import { Ray } from "./ray";
 import { Shape } from "./shape";
-import { Transform } from "./transform";
 import { Vector } from "./vector";
 
 export interface StableCheckpointRaycast {
@@ -16,9 +12,7 @@ export interface ReflectiveCheckpointRaycast extends StableCheckpointRaycast {
 }
 
 export type CheckpointRaycast = StableCheckpointRaycast & Partial<ReflectiveCheckpointRaycast>;
-
 export type VisibilityPolygonSegmentShareMap = InstanceType<typeof VisibilityPolygon.SegmentShareMap>;
-export type VisibilityPolygonPathCreator = InstanceType<typeof VisibilityPolygon.PathCreator>;
 
 export interface CheckpointRaycastCreationOptions {
   readonly segmentShareMap: VisibilityPolygonSegmentShareMap;
@@ -27,8 +21,8 @@ export interface CheckpointRaycastCreationOptions {
   readonly fulcrum: Vector;
   readonly shapes: Shape[];
 
-  readonly shapeInterimVertices?: Vector[];
   readonly lightBounds?: Shape;
+  readonly shapeInterimVertices?: Vector[];
   readonly lightBoundsInterimVertices?: Vector[];
 }
 
@@ -49,23 +43,16 @@ export interface VisibilityPolygonSectorOptions extends VisibilityPolygonCreatio
   readonly nearPlane: number;
 }
 
-const boundsOverlaping = (a: Shape, b: Shape) => {
-  const av = a.vertices;
-  const bv = b.vertices;
-
-  return av[1].x > bv[0].x && av[0].x < bv[1].x && av[0].y > bv[3].y && av[3].y < bv[0].y;
-}
-
 export class VisibilityPolygon {
   public readonly fulcrum: Vector;
   public readonly segmentShareMap: VisibilityPolygonSegmentShareMap;
-  public readonly pathCreator: VisibilityPolygonPathCreator;
 
   public readonly externalMaskBounds: Shape;
   public readonly visibleObsticles: Shape[];
   public readonly visibleObsticleSegments: Shape.Segment[]; 
   public readonly checkpointVertices: Vector[] = []; // Needed directly definition from outside (effect)
   public readonly checkpointRaycasts: CheckpointRaycast[] = [];
+  public readonly path: Vector[] = [];
 
   public readonly obsticlesWithBoundsIntersections: Shape.SegmentIntersection[];
   public readonly obsticlesWithBoundsInterimVertices: Vector[];
@@ -75,7 +62,7 @@ export class VisibilityPolygon {
 
   public readonly intersections: Shape.SegmentIntersection[] = [];
 
-  private constructor(options: VisibilityPolygonCreationOptions) {
+  protected constructor(options: VisibilityPolygonCreationOptions) {
     const { fulcrum, obsticles, skipObsticleCulling, externalMasks } = options;
     
     this.fulcrum = fulcrum;
@@ -88,7 +75,6 @@ export class VisibilityPolygon {
     this.visibleObsticleSegments = Shape.segmentCluster(this.visibleObsticles);
     
     this.segmentShareMap = new VisibilityPolygon.SegmentShareMap(...this.visibleObsticleSegments, ...this.externalMaskBounds.segments);
-    this.pathCreator = new VisibilityPolygon.PathCreator(this.segmentShareMap);
     
     // Bound calculations
     this.obsticlesWithBoundsIntersections = this.visibleObsticles.map(obsticle => Shape.segmentIntersections(this.externalMaskBounds, obsticle)).flat();
@@ -112,165 +98,17 @@ export class VisibilityPolygon {
     }
   }
 
-  public static createPanorama(options: VisibilityPolygonPanoramaCreationOptions) {
-    const {} = options;
-
-    const visibilityPolygon = new VisibilityPolygon(options);
-
-    visibilityPolygon.checkpointVertices.push(
-      ...Shape.vertexCluster(visibilityPolygon.visibleObsticles),
-      ...visibilityPolygon.obsticlesWithObsticlesInterimVertices,
-      ...visibilityPolygon.obsticlesWithBoundsInterimVertices,
-      ...visibilityPolygon.externalMaskBounds.vertices,
-    );
-
-    const shapes = [visibilityPolygon.externalMaskBounds, ...visibilityPolygon.visibleObsticles];
-    visibilityPolygon.registerRaycastCheckpoints(shapes);
-
-    for (const checkpointRaycast of visibilityPolygon.checkpointRaycasts) {
-      const { endpoint, endpointSegment } = checkpointRaycast;
-      if (endpoint && endpointSegment) {
-        visibilityPolygon.segmentShareMap.add(endpointSegment, endpoint)
-      }
-    }
-
-    const relativeCheckpointRotation = (vertex: Vector) => vertex.subtract(visibilityPolygon.fulcrum).rotation();
-    const positiveRotationComparison = (a: CheckpointRaycast, b: CheckpointRaycast) => (
-      relativeCheckpointRotation(a.exposed) - relativeCheckpointRotation(b.exposed)
-    )
-    
-    visibilityPolygon.checkpointRaycasts.sort(positiveRotationComparison);
-
-    for (let i = 0; i < visibilityPolygon.checkpointRaycasts.length; i++) {
-      const currentCheckpointRaycast = visibilityPolygon.checkpointRaycasts[i];
-      const previousCheckpointRaycast = visibilityPolygon.checkpointRaycasts.at(i - 1);
-
-      if (!previousCheckpointRaycast) {
-        throw new Error(`previousCheckpointRaycast doesn't exist`);
-      }
-
-      if (visibilityPolygon.pathCreator.exposedConnection(currentCheckpointRaycast, previousCheckpointRaycast)) {
-        continue;
-      }
-
-      if (visibilityPolygon.pathCreator.endpointConnection(currentCheckpointRaycast, previousCheckpointRaycast)) {
-        continue;
-      }
-
-      if (visibilityPolygon.pathCreator.increasingConnection(currentCheckpointRaycast, previousCheckpointRaycast)) {
-        continue;
-      }
-
-      if (visibilityPolygon.pathCreator.decreasingConnection(currentCheckpointRaycast, previousCheckpointRaycast)) {
-        continue;
-      }
-    }
-
-    return visibilityPolygon;
+  public [Symbol.iterator]() {
+    return this.path;
   }
 
-  public static createSector(options: VisibilityPolygonSectorOptions) {
-    const { fulcrum, direction, angle, nearPlane } = options;
-
-    const visibilityPolygon = new VisibilityPolygon(options);
-
-    const normalizeRotation = (angle: number) => (angle >= 0 ? angle : angle + Math.PI * 2) % (Math.PI * 2);
-
-    const basisAngle = normalizeRotation(direction.rotation() % (Math.PI * 2));
-
-    
-    visibilityPolygon.checkpointVertices.push(
-      ...Shape.vertexCluster(visibilityPolygon.visibleObsticles),
-      ...visibilityPolygon.obsticlesWithObsticlesInterimVertices,
-      ...visibilityPolygon.obsticlesWithBoundsInterimVertices,
-      ...visibilityPolygon.externalMaskBounds.vertices,
-    );
-      
-    const shapes = [visibilityPolygon.externalMaskBounds, ...visibilityPolygon.visibleObsticles];
-    visibilityPolygon.registerRaycastCheckpoints(shapes);
-      
-    const createLimiterReflectiveCheckpoint = (angle: number) => {
-      const resolution = new Ray(fulcrum, Vector.fromAngle(angle)).cast(shapes)!;
-      return VisibilityPolygon.createReflectiveRaycastCheckpoint(
-        resolution.direction.normalized.multiply(nearPlane).add(fulcrum),
-        resolution.intersectionPosition,
-        resolution.segment,
-      );
-    };
-        
-    const angleDifference = angle / 2;
-    const negativeAngle = normalizeRotation(basisAngle - angleDifference);
-    const positiveAngle = normalizeRotation(basisAngle + angleDifference);
-    const negativeRaycastCheckpoint = createLimiterReflectiveCheckpoint(negativeAngle);
-    const positiveRaycastCheckpoint = createLimiterReflectiveCheckpoint(positiveAngle);
-
-    visibilityPolygon.checkpointRaycasts.push(negativeRaycastCheckpoint, positiveRaycastCheckpoint);
-
-    for (const checkpointRaycast of visibilityPolygon.checkpointRaycasts) {
-      const { endpoint, endpointSegment } = checkpointRaycast;
-      if (endpoint && endpointSegment) {
-        visibilityPolygon.segmentShareMap.add(endpointSegment, endpoint)
-      }
+  private cachedShape: Shape | null = null;
+  public get shape() {
+    if (this.cachedShape) {
+      return this.cachedShape;
     }
 
-    const sectorViewportCheckpointRaycasts = visibilityPolygon.checkpointRaycasts.filter(raycast => {
-      if (raycast === negativeRaycastCheckpoint || raycast === positiveRaycastCheckpoint) {
-        return true;
-      }
-
-      const rotation = raycast.exposed.subtract(fulcrum).rotation();
-      if (negativeAngle <= positiveAngle) {
-        return rotation >= negativeAngle && rotation <= positiveAngle;
-      }
-
-      return rotation >= negativeAngle || rotation <= positiveAngle;
-    });
-
-    const relativeCheckpointRotation = (vertex: Vector) => vertex.subtract(visibilityPolygon.fulcrum).rotation();
-    const positiveRotationComparison = (a: CheckpointRaycast, b: CheckpointRaycast) => (
-      relativeCheckpointRotation(a.endpoint ?? a.exposed) - relativeCheckpointRotation(b.endpoint ?? b.exposed)
-    );
-    
-    visibilityPolygon.checkpointRaycasts.length = 0;
-    visibilityPolygon.checkpointRaycasts.push(...sectorViewportCheckpointRaycasts);
-    visibilityPolygon.checkpointRaycasts.sort(positiveRotationComparison);
-
-    for (let i = 0; i < visibilityPolygon.checkpointRaycasts.length; i++) {
-      const currentCheckpointRaycast = visibilityPolygon.checkpointRaycasts[i];
-      const previousCheckpointRaycast = visibilityPolygon.checkpointRaycasts.at(i - 1);
-
-      if (!previousCheckpointRaycast) {
-        throw new Error(`previousCheckpointRaycast doesn't exist`);
-      }
-
-      if (currentCheckpointRaycast.exposed === negativeRaycastCheckpoint.exposed) {
-        visibilityPolygon.pathCreator.path.push(currentCheckpointRaycast.exposed, currentCheckpointRaycast.endpoint!);
-        continue;
-      }
-
-      if (currentCheckpointRaycast.exposed === positiveRaycastCheckpoint.exposed) {
-        visibilityPolygon.pathCreator.path.push(currentCheckpointRaycast.endpoint!, currentCheckpointRaycast.exposed);
-        continue;
-      }
-
-      if (visibilityPolygon.pathCreator.exposedConnection(currentCheckpointRaycast, previousCheckpointRaycast)) {
-        continue;
-      }
-
-      if (visibilityPolygon.pathCreator.endpointConnection(currentCheckpointRaycast, previousCheckpointRaycast)) {
-        continue;
-      }
-
-      if (visibilityPolygon.pathCreator.increasingConnection(currentCheckpointRaycast, previousCheckpointRaycast)) {
-        continue;
-      }
-
-      if (visibilityPolygon.pathCreator.decreasingConnection(currentCheckpointRaycast, previousCheckpointRaycast)) {
-        continue;
-      }
-    }
-
-    return visibilityPolygon;
+    return this.cachedShape = new Shape(this.path);
   }
 
   private createRaycastCheckpoint(checkpointVertex: Vector, shapes: Shape[]) {
@@ -325,7 +163,7 @@ export class VisibilityPolygon {
     return reflectiveRaycastCheckpoint;
   }
 
-  private registerRaycastCheckpoints(shapes: Shape[]) {
+  protected registerRaycastCheckpoints(shapes: Shape[]) {
     for (const checkpointVertex of this.checkpointVertices) {
       const raycastCheckpoint = this.createRaycastCheckpoint(checkpointVertex, shapes);
       if (raycastCheckpoint) {
@@ -334,8 +172,78 @@ export class VisibilityPolygon {
     }
   }
 
+  protected establishExposedConnection(currentCheckpointRaycast: CheckpointRaycast, previousCheckpointRaycast: CheckpointRaycast) {
+    const { segmentShareMap, path } = this;
+    if (segmentShareMap.verticesShareSegment(currentCheckpointRaycast.exposed, previousCheckpointRaycast.exposed)) {
+      path.push(currentCheckpointRaycast.exposed);
+      if (currentCheckpointRaycast.endpoint) {
+        path.push(currentCheckpointRaycast.endpoint);
+      }
+
+      return true;
+    }
+
+    return false;
+  }
+
+  protected establishEndpointConnection(currentCheckpointRaycast: CheckpointRaycast, previousCheckpointRaycast: CheckpointRaycast) {
+    const { segmentShareMap, path } = this;
+
+    if (
+      currentCheckpointRaycast.endpoint &&
+      previousCheckpointRaycast.endpoint &&
+      segmentShareMap.verticesShareSegment(currentCheckpointRaycast.endpoint, previousCheckpointRaycast.endpoint)
+    ) {
+      path.push(currentCheckpointRaycast.endpoint, currentCheckpointRaycast.exposed);
+      return true;
+    }
+    
+    return false;
+  }
+
+  protected establishIncreasingConnection(currentCheckpointRaycast: CheckpointRaycast, previousCheckpointRaycast: CheckpointRaycast) {
+    const { segmentShareMap, path } = this;
+
+    if (
+      currentCheckpointRaycast.endpoint &&
+      segmentShareMap.verticesShareSegment(currentCheckpointRaycast.endpoint, previousCheckpointRaycast.exposed)
+    ) {
+      path.push(currentCheckpointRaycast.endpoint, currentCheckpointRaycast.exposed);
+      return true;
+    }
+
+    return false;
+  }
+
+  protected establishDecreasingConnection(currentCheckpointRaycast: CheckpointRaycast, previousCheckpointRaycast: CheckpointRaycast) {
+    const { segmentShareMap, path } = this;
+
+    if (
+      previousCheckpointRaycast.endpoint &&
+      segmentShareMap.verticesShareSegment(currentCheckpointRaycast.exposed, previousCheckpointRaycast.endpoint)
+    ) {
+      path.push(currentCheckpointRaycast.exposed);
+      if (currentCheckpointRaycast.endpoint) {
+        path.push(currentCheckpointRaycast.endpoint);
+      }
+
+      return true;
+    }
+
+    return false;
+  }
+
+  protected establishUniversalConnection(currentCheckpointRaycast: CheckpointRaycast, previousCheckpointRaycast: CheckpointRaycast) {
+    return (
+      this.establishExposedConnection(currentCheckpointRaycast, previousCheckpointRaycast) ||
+      this.establishEndpointConnection(currentCheckpointRaycast, previousCheckpointRaycast) ||
+      this.establishIncreasingConnection(currentCheckpointRaycast, previousCheckpointRaycast) ||
+      this.establishDecreasingConnection(currentCheckpointRaycast, previousCheckpointRaycast)
+    );
+  }
+
   public static obsticleCulling(obsticles: Shape[], maskBounds: Shape) {
-    return obsticles.filter(maskBounds.overlaps);
+    return obsticles.filter((obsticle) => maskBounds.overlaps(obsticle));
   }
 
   public static getOverlapsShape(fulcrum: Vector, shapes: Shape[]) {
@@ -344,11 +252,11 @@ export class VisibilityPolygon {
     return escapeRayOpenStack.size !== 0;
   }
 
-  private static bounds(fulcrum: Vector, range: number) {
-    const scale = Vector.one.multiply(range);
-    const boundsTransform = Transform.setScale(scale).setPosition(fulcrum);
-    return new Rectangle().withTransform(boundsTransform);
-  }
+  // private static bounds(fulcrum: Vector, range: number) {
+  //   const scale = Vector.one.multiply(range);
+  //   const boundsTransform = Transform.setScale(scale).setPosition(fulcrum);
+  //   return new Rectangle().withTransform(boundsTransform);
+  // }
 
   public static SegmentShareMap = class VisibilityPolygonSegmentShareMap extends Map<Shape.Segment, Vector[]> {
     constructor(...segments: Shape.Segment[]) {
@@ -381,78 +289,11 @@ export class VisibilityPolygon {
     }
   }
 
-  public static PathCreator = class VisibilityPolygonPathCreator {
-    public readonly path: Vector[] = [];
-
-    public constructor(
-      public readonly segmentShareMap: VisibilityPolygonSegmentShareMap, 
-    ) {}
-
-    public exposedConnection(currentCheckpointRaycast: CheckpointRaycast, previousCheckpointRaycast: CheckpointRaycast) {
-      const { segmentShareMap, path } = this;
-      if (segmentShareMap.verticesShareSegment(currentCheckpointRaycast.exposed, previousCheckpointRaycast.exposed)) {
-        path.push(currentCheckpointRaycast.exposed);
-        if (currentCheckpointRaycast.endpoint) {
-          path.push(currentCheckpointRaycast.endpoint);
-        }
-        return true
-      }
-
-      return false;
-    }
-
-    public endpointConnection(currentCheckpointRaycast: CheckpointRaycast, previousCheckpointRaycast: CheckpointRaycast) {
-      const { segmentShareMap, path } = this;
-
-      if (
-        currentCheckpointRaycast.endpoint &&
-        previousCheckpointRaycast.endpoint &&
-        segmentShareMap.verticesShareSegment(currentCheckpointRaycast.endpoint, previousCheckpointRaycast.endpoint)
-      ) {
-        path.push(currentCheckpointRaycast.endpoint, currentCheckpointRaycast.exposed);
-        return true;
-      }
-      
-      return false;
-    }
-
-    public increasingConnection(currentCheckpointRaycast: CheckpointRaycast, previousCheckpointRaycast: CheckpointRaycast) {
-      const { segmentShareMap, path } = this;
-
-      if (
-        currentCheckpointRaycast.endpoint &&
-        segmentShareMap.verticesShareSegment(currentCheckpointRaycast.endpoint, previousCheckpointRaycast.exposed)
-      ) {
-        path.push(currentCheckpointRaycast.endpoint, currentCheckpointRaycast.exposed);
-        return true;
-      }
-
-      return false;
-    }
-
-    public decreasingConnection(currentCheckpointRaycast: CheckpointRaycast, previousCheckpointRaycast: CheckpointRaycast) {
-      const { segmentShareMap, path } = this;
-
-      if (
-        previousCheckpointRaycast.endpoint &&
-        segmentShareMap.verticesShareSegment(currentCheckpointRaycast.exposed, previousCheckpointRaycast.endpoint)
-      ) {
-        path.push(currentCheckpointRaycast.exposed);
-        if (currentCheckpointRaycast.endpoint) {
-          path.push(currentCheckpointRaycast.endpoint);
-        }
-        return true;
-      }
-
-      return false;
-    }
-  }
-
   private static createStableRaycastCheckpoint(exposed: Vector): StableCheckpointRaycast {
     return { exposed };
   }
 
-  private static createReflectiveRaycastCheckpoint(exposed: Vector, endpoint: Vector, endpointSegment: Shape.Segment) {
+  protected static createReflectiveRaycastCheckpoint(exposed: Vector, endpoint: Vector, endpointSegment: Shape.Segment) {
     return { exposed, endpoint, endpointSegment };
   }
 }
