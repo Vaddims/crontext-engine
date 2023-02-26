@@ -1,18 +1,22 @@
-import { CircleCollider, Collider } from "../components";
-import { Entity, Vector } from "../core";
-import { Collision } from "../core/collision";
-import { CollisionDetection } from "../core/systems/collision-systems/collision-detection";
-import { CollisionPenetrationResolution, CollisionState } from "../core/systems/collision-systems/collision-penetration-resolution";
-import { DetailedCollision } from "../core/detailed-collision";
+import { Component } from "../core";
 import { Scene } from "../core/scene";
+import { Objectra } from "objectra";
+
+export enum SimulationUpdateState {
+  Active, // Request new updates as time goes on
+  Passive, // Resolving the remaining updates without creating new update requests
+  Frozen, // All updates resolved
+}
 
 export class Simulation {
   public updateOnFrameChange = true;
+  private loadedScene: Scene;
   private activeScene: Scene;
-  private running = false;
+  private updateState = SimulationUpdateState.Frozen;
   
   constructor(scene = new Scene) {
-    this.activeScene = scene;
+    this.loadedScene = Objectra.duplicate(scene);
+    this.activeScene = Objectra.duplicate(this.loadedScene);
   }
 
   public get scene() {
@@ -20,128 +24,49 @@ export class Simulation {
   }
 
   public loadScene(scene: Scene) {
-    this.activeScene = scene;
-    this.start();
+    this.stop();
+    this.loadedScene = Objectra.duplicate(scene);
+    this.activeScene = Objectra.duplicate(this.loadedScene);
+    return this.activeScene;
+  }
+
+  public reloadScene() {
+    this.activeScene = Objectra.duplicate(this.loadedScene);
+    return this.activeScene;
   }
 
   public start() {
-    this.running = true;
-    this.activeScene.update();
-
-    const entities = this.activeScene.getEntities();
-    for (const entity of entities) {
-      for (const component of entity.components) {
-        component.start?.();
-      }
-    }
+    const { activeScene } = this;
 
     if (this.updateOnFrameChange) {
-      requestAnimationFrame(this.update.bind(this));
+      const coldStart = this.updateState === SimulationUpdateState.Frozen;
+      this.updateState = SimulationUpdateState.Active;
+      if (coldStart) {
+        activeScene.requestComponentActionEmission(Component.onStart, []);
+        activeScene.update();
+        requestAnimationFrame(this.update.bind(this));
+      }
     }
   }
   
   public update() {
-    if (!this.running) {
+    if (this.updateState !== SimulationUpdateState.Active) {
+      this.updateState = SimulationUpdateState.Frozen;
       return;
     }
     
-    this.scene.update();
-
-    const entities = Array.from(this.activeScene);
-    const entityInitialPositionMap = new Map<Entity, Vector>();
-    
-    for (const entity of entities) {
-      entityInitialPositionMap.set(entity, entity.transform.position.duplicate());
-    }
-
-    for (const entity of entities) {
-      for (const component of entity.components) {
-        if (component instanceof Collider) {
-          continue;
-        }
-
-        component.update?.();
-      }
-    }
-
-    for (let i = 0; i < entities.length; i++) {
-      const entity = entities[i];
-
-      // Proccess the collisions component
-      const collider = entity.components.findOfType(Collider);
-      if (!collider) {
-        continue;
-      }
-
-      for (let j = i + 1; j < entities.length; j++) {
-        const targetEntity = entities[j];
-
-        const targetEntityCollider = targetEntity.components.findOfType(Collider);
-        if (!targetEntityCollider) {
-          continue;
-        }
-
-        const initialPositions = [entityInitialPositionMap.get(entity)!, entityInitialPositionMap.get(targetEntity)!] as [Vector, Vector];
-        const collisionDetected = CollisionDetection.detectFrom(collider, targetEntityCollider);
-        if (!collisionDetected) {
-          continue;
-        }
-
-        // const detailedCollision = new DetailedCollision([collider, targetEntityCollider], initialPositions);
-        const res = (coll: Collider): CollisionState<Collider> => {
-          const initialPos = entityInitialPositionMap.get(coll.entity)!;
-          return {
-            collider: coll,
-            deltaPosition: coll.entity.transform.position.subtract(initialPos),
-          }
-        }
-
-        const resolutions = [res(collider), res(targetEntityCollider)];
-        if (resolutions[0].deltaPosition.magnitude < resolutions[1].deltaPosition.magnitude) {
-          resolutions.reverse();
-        }
-
-        CollisionPenetrationResolution.resolve({
-          colliders: [collider, targetEntityCollider],
-          active: resolutions[0],
-          passive: resolutions[1],
-        });
-
-        for (const component of entity.components) {
-          component.onCollision?.(new Collision(targetEntityCollider));
-        }
-
-        for (const component of targetEntity.components) {
-          component.onCollision?.(new Collision(collider));
-        }
-        
-        //const detailedCollision = new DetailedCollision([collider, targetEntityCollider], initialPositions);
-        // const collision = collider.collisionDetection(targetCollider)
-        // if (!collision) {
-        //   continue;
-        // }
-
-        // if (!collider.isTrigger && !targetCollider.isTrigger) {
-        //   collider.penetrationResolution(targetCollider);
-        //   for (const component of entity.components) {
-        //     component.onCollision?.(collision);
-        //   }
-        // }
-
-        // TODO trigger
-      }
-    }
-
     if (this.updateOnFrameChange) {
       requestAnimationFrame(this.update.bind(this));
     }
   }
   
   public stop() {
-    this.running = false;
+    if (this.updateState === SimulationUpdateState.Active) {
+      this.updateState = SimulationUpdateState.Passive;
+    }
   }
 
   public get isRunning() {
-    return this.running;
+    return this.updateState === SimulationUpdateState.Active;
   }
 }

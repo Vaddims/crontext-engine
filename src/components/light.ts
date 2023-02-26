@@ -16,7 +16,7 @@ export interface ReflectiveCheckpointRaycast extends StableCheckpointRaycast {
 export type CheckpointRaycast = StableCheckpointRaycast & Partial<ReflectiveCheckpointRaycast>;
 
 export interface CheckpointRaycastCreationOptions {
-  readonly segmentShareMap: InstanceType<typeof LightSource.SegmentShareMap>;
+  readonly segmentShareMap: LightSourceSegmentShareMap;
   readonly checkpointVertices: Vector[];
   readonly entityShapes: Shape[];
   readonly fulcrum: Vector;
@@ -31,6 +31,25 @@ export interface LightSource {
   render(renderer: SimulationRenderingPipeline): void;
 }
 
+class LightSourceSegmentShareMap extends Map {
+  add(segment: Shape.Segment, ...vertices: Vector[]) {
+    const requiredVertices = vertices.length === 0 ? [...segment] : vertices; 
+    const existingVertices = this.get(segment);
+
+    if (existingVertices) {
+      existingVertices.push(...requiredVertices);
+    } else {
+      this.set(segment, [...requiredVertices]);
+    }
+
+    return this;
+  }
+
+  verticesShareSegment(a: Vector, b: Vector) {
+    return Array.from(this.values()).some(vertices => vertices.includes(a) && vertices.includes(b));
+  }
+}
+
 export class LightSource extends Component {
   public usePhysicalRendering = true; // Rendering with shadow casts
   public physicalRenderingDependence: ComponentConstructor<MeshRenderer> | ComponentConstructor<Collider> = MeshRenderer;
@@ -42,25 +61,6 @@ export class LightSource extends Component {
 
   public static createReflectiveRaycastCheckpoint(exposed: Vector, endpoint: Vector, endpointSegment: Shape.Segment) {
     return { exposed, endpoint, endpointSegment };
-  }
-
-  public static SegmentShareMap = class SegmentShareMap extends Map {
-    add(segment: Shape.Segment, ...vertices: Vector[]) {
-      const requiredVertices = vertices.length === 0 ? [...segment] : vertices; 
-      const existingVertices = this.get(segment);
-
-      if (existingVertices) {
-        existingVertices.push(...requiredVertices);
-      } else {
-        this.set(segment, [...requiredVertices]);
-      }
-
-      return this;
-    }
-
-    verticesShareSegment(a: Vector, b: Vector) {
-      return Array.from(this.values()).some(vertices => vertices.includes(a) && vertices.includes(b));
-    }
   }
   
   public static createRaycastCheckpoints(options: CheckpointRaycastCreationOptions) {

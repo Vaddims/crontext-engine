@@ -7,7 +7,7 @@ import { SimulationInspector } from "../simulations/simulation-inspector";
 import { Vector } from "../core/vector";
 import { Camera } from "../components/camera";
 import { Gizmos } from "../core/gizmos";
-import { Entity } from "../core";
+import { Component, Entity } from "../core";
 import { Rectangle } from "../shapes";
 
 export class SimulationInspectorRenderer extends Renderer {
@@ -23,7 +23,7 @@ export class SimulationInspectorRenderer extends Renderer {
     this.inspector = new SimulationInspector(this, simulation);
     this.render();
 
-    if (Object.hasOwn(window, 'safari')) {
+    if (Object.prototype.hasOwnProperty.call(window, 'safari')) {
       canvas.addEventListener('gesturestart', this.gestureStartHandler.bind(this))
       canvas.addEventListener('gesturechange', this.gestureHandler.bind(this))
       canvas.addEventListener('gestureend', this.gestureHandler.bind(this))
@@ -105,7 +105,7 @@ export class SimulationInspectorRenderer extends Renderer {
 
     for (const entity of visibleEntities) {
       for (const component of entity.components) {
-        component.gizmosRender?.(gizmos);
+        component[Component.onGizmosRender]?.(gizmos);
       }
     }
 

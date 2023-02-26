@@ -1,3 +1,4 @@
+import { Transformator } from "objectra";
 import { rotatedOffsetPosition, segmentWithSegmentIntersection } from "../utils/crontext-math";
 import { Transform } from "./transform";
 import { Vector } from "./vector";
@@ -12,9 +13,11 @@ export namespace Shape {
   }
 }
 
+@Transformator.Register()
 export class Shape {
   protected clockwiseInitialization = false;
   
+  @Transformator.ArgumentPassthrough()
   public readonly vertices: ReadonlyArray<Vector>;
   public readonly segmentVertexIndexes: ReadonlyArray<Shape.SegmentIndexes>;
   public readonly segments: ReadonlyArray<Shape.Segment>;

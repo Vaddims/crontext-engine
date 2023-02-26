@@ -1,3 +1,4 @@
+import { Transformator } from "objectra";
 import { staticValuePrebuilder } from "../utils/static-value-prebuilder";
 
 type RawVector = [number, number];
@@ -6,8 +7,12 @@ type VectorOperationCallback = (a: number, b: number) => number;
 
 const Prebuild = staticValuePrebuilder<Vector>(vector => vector.duplicate());
 
+@Transformator.Register()
 export class Vector {
+  @Transformator.ArgumentPassthrough()
   private 0: number;
+  
+  @Transformator.ArgumentPassthrough()
   private 1: number;
 
   constructor(x: number, y: number) {

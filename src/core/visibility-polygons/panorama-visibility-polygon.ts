@@ -36,7 +36,9 @@ export class PanoramaVisibilityPolygon extends VisibilityPolygon {
 
     for (let i = 0; i < this.checkpointRaycasts.length; i++) {
       const currentCheckpointRaycast = this.checkpointRaycasts[i];
-      const previousCheckpointRaycast = this.checkpointRaycasts.at(i - 1);
+      const relativeIndex = i - 1;
+      const index = relativeIndex < 0 ? this.checkpointRaycasts.length + relativeIndex : relativeIndex;
+      const previousCheckpointRaycast = this.checkpointRaycasts[index];
 
       if (!previousCheckpointRaycast) {
         throw new Error(`previousCheckpointRaycast doesn't exist`);

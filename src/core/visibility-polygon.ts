@@ -12,7 +12,6 @@ export interface ReflectiveCheckpointRaycast extends StableCheckpointRaycast {
 }
 
 export type CheckpointRaycast = StableCheckpointRaycast & Partial<ReflectiveCheckpointRaycast>;
-export type VisibilityPolygonSegmentShareMap = InstanceType<typeof VisibilityPolygon.SegmentShareMap>;
 
 export interface CheckpointRaycastCreationOptions {
   readonly segmentShareMap: VisibilityPolygonSegmentShareMap;
@@ -41,6 +40,37 @@ export interface VisibilityPolygonSectorOptions extends VisibilityPolygonCreatio
   readonly direction: Vector;
   readonly angle: number;
   readonly nearPlane: number;
+}
+
+export class VisibilityPolygonSegmentShareMap extends Map<Shape.Segment, Vector[]> {
+  constructor(...segments: Shape.Segment[]) {
+    super(segments.map((segment => [segment, [...segment]])))
+  }
+
+  add(segment: Shape.Segment, ...vertices: Vector[]) {
+    const requiredVertices = vertices.length === 0 ? [...segment] : vertices;
+    const existingVertices = this.get(segment);
+
+    if (existingVertices) {
+      existingVertices.push(...requiredVertices);
+    } else {
+      this.set(segment, [...requiredVertices]);
+    }
+    
+    return this;
+  }
+
+  addHolders(vertex: Vector, holders: Shape.SegmentIntersection['segmentHolders']) {
+    for (const holder of holders) {
+      this.add(holder, vertex);
+    }
+    
+    return this;
+  }
+
+  verticesShareSegment(a: Vector, b: Vector) {
+    return Array.from(this.values()).some(vertices => vertices.includes(a) && vertices.includes(b));
+  }
 }
 
 export class VisibilityPolygon {
@@ -74,7 +104,7 @@ export class VisibilityPolygon {
     
     this.visibleObsticleSegments = Shape.segmentCluster(this.visibleObsticles);
     
-    this.segmentShareMap = new VisibilityPolygon.SegmentShareMap(...this.visibleObsticleSegments, ...this.externalMaskBounds.segments);
+    this.segmentShareMap = new VisibilityPolygonSegmentShareMap(...this.visibleObsticleSegments, ...this.externalMaskBounds.segments);
     
     // Bound calculations
     this.obsticlesWithBoundsIntersections = this.visibleObsticles.map(obsticle => Shape.segmentIntersections(this.externalMaskBounds, obsticle)).flat();
@@ -257,37 +287,6 @@ export class VisibilityPolygon {
   //   const boundsTransform = Transform.setScale(scale).setPosition(fulcrum);
   //   return new Rectangle().withTransform(boundsTransform);
   // }
-
-  public static SegmentShareMap = class VisibilityPolygonSegmentShareMap extends Map<Shape.Segment, Vector[]> {
-    constructor(...segments: Shape.Segment[]) {
-      super(segments.map((segment => [segment, [...segment]])))
-    }
-
-    add(segment: Shape.Segment, ...vertices: Vector[]) {
-      const requiredVertices = vertices.length === 0 ? [...segment] : vertices;
-      const existingVertices = this.get(segment);
-
-      if (existingVertices) {
-        existingVertices.push(...requiredVertices);
-      } else {
-        this.set(segment, [...requiredVertices]);
-      }
-      
-      return this;
-    }
-
-    addHolders(vertex: Vector, holders: Shape.SegmentIntersection['segmentHolders']) {
-      for (const holder of holders) {
-        this.add(holder, vertex);
-      }
-      
-      return this;
-    }
-
-    verticesShareSegment(a: Vector, b: Vector) {
-      return Array.from(this.values()).some(vertices => vertices.includes(a) && vertices.includes(b));
-    }
-  }
 
   private static createStableRaycastCheckpoint(exposed: Vector): StableCheckpointRaycast {
     return { exposed };

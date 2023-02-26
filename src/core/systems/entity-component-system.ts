@@ -1,10 +1,23 @@
+import { Transformator } from "objectra";
+import { Constructor } from "objectra/dist/types/util.types";
 import { Component, ComponentConstructor } from "../component";
 import { Entity } from "../entity";
 
+@Transformator.Register({
+  // symbolIteratorEntryDepth: 1,
+  // useSerializationSymbolIterator: true,
+  // getter: (target: EntityComponentSystem, instance: Component) => target.find(instance.constructor as Constructor),
+  // setter: (target: EntityComponentSystem, instance: Component) => target.addInstance(instance),
+})
 export class EntityComponentSystem {
   private readonly components = new Map<ComponentConstructor, Component>();
 
-  constructor(private readonly entity: Entity) {}
+  @Transformator.ArgumentPassthrough()
+  readonly entity: Entity;
+
+  constructor(entity: Entity) {
+    this.entity = entity;
+  }
 
   [Symbol.iterator](): IterableIterator<Component> {
     return this.components.values();
@@ -77,6 +90,16 @@ export class EntityComponentSystem {
     this.components.set(baseConstructor, componentInstance);
     return componentInstance as InstanceType<T>;
   }
+
+  // public addInstance<T extends Component>(componentInstance: T) {
+  //   const baseConstructor = Component.getBaseclassOf(componentInstance.constructor as Constructor);
+  //   if (this.hasInstance(componentInstance)) {
+  //     throw new Error(`Component of class ${baseConstructor.name} already exists`);
+  //   }
+
+  //   this.components.set(baseConstructor, componentInstance);
+  //   return componentInstance;
+  // }
 
   public hasInstance<T extends Component>(instance: T) {
     for (const componentInstance of this.components.values()) {

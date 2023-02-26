@@ -75,14 +75,7 @@ export class SpotLight extends LightSource {
       }
     }
 
-    if (this.rerateFPS) {
-      this.rerateFPS = false;
-      this.fps = Math.min(60, Number(gizmos.renderer.fps.toFixed(0)));
-    }
-    
     const list = [
-      `${this.fps} fps`,
-      '',
       `${visibilityPolygon.checkpointVertices.length} total checkpoint vertices`,
       `${visibilityPolygon.obsticlesWithObsticlesInterimVertices.length} entity to entity overlaping vertices`,
       `${visibilityPolygon.obsticlesWithBoundsInterimVertices.length} entity overlap vertices with light bounds`,

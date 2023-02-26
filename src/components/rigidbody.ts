@@ -112,21 +112,20 @@ export class Rigidbody extends Component {
   static {
     Rigidbody.setResolver(CircleCollider, CircleCollider, (rb, rbCollider, collisionCollider) => {
       const collisionRb = collisionCollider.entity.components.find(Rigidbody);
-      console.log('ok')
-
+    
       const normal = rbCollider.position.subtract(collisionCollider.position).normalized;
       const relativeVelocity = collisionRb ? rb.velocity.subtract(collisionRb.velocity) : rb.velocity;
       const seperateVelocity = Vector.dot(relativeVelocity, normal);
-
+    
       const smallestElasticity = collisionRb ? Math.min(rb.elasticity, collisionRb.elasticity) : rb.elasticity;
       const newSeperateVelocity = -seperateVelocity * smallestElasticity;
-
+    
       const invertedMass = 1 / rb.mass;
       const velocitySeperateDifference = newSeperateVelocity - seperateVelocity;
       const targetInvertedMass = collisionRb ? 1 / collisionRb.mass : 0;
       const impulse = Math.abs(velocitySeperateDifference / (invertedMass + targetInvertedMass));
       const impulseVector = normal.multiply(impulse);
-
+    
       rb.velocity = rb.velocity.add(impulseVector.multiply(invertedMass));
       if (collisionRb) {
         collisionRb.velocity = collisionRb.velocity.add(impulseVector.multiply(-1 / collisionRb.mass));

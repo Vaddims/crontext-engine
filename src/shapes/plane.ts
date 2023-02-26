@@ -1,5 +1,7 @@
+import { Transformator } from "objectra";
 import { Shape, Vector } from "../core";
 
+@Transformator.Register()
 export class Plane extends Shape {
   constructor() {
     super([

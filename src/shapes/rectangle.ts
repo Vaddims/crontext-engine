@@ -1,6 +1,8 @@
+import { Transformator } from "objectra";
 import { Shape } from "../core/shape";
 import { Vector } from "../core/vector";
 
+@Transformator.Register()
 export class Rectangle extends Shape {
   constructor() {
     super([

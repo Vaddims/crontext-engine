@@ -1,10 +1,17 @@
-import { SceneEventRequestSystem } from "./scene-event-request-system";
 import { EntityTransform } from "./entity-transform";
 import { Scene } from "./scene";
 import { EntityComponentSystem } from "./systems/entity-component-system";
 import { EntityLayerSystem } from "./systems/entity-layer-system";
+import { Transformator } from "objectra";
 
-export class Entity extends SceneEventRequestSystem {
+export enum EntitySceneStatus {
+  AwaitingInstantiation,
+  AwaitingDestruction,
+  Idle,
+}
+
+@Transformator.Register()
+export class Entity {
   public name = "Entity";
   
   private parentScene: Scene | null = null;
@@ -13,7 +20,7 @@ export class Entity extends SceneEventRequestSystem {
   public readonly components = new EntityComponentSystem(this);
   public readonly transform = new EntityTransform(this);
   public readonly layers = new EntityLayerSystem();
-  protected readonly children = new Set<Entity>();
+  private readonly children = new Set<Entity>();
 
   public [Symbol.toPrimitive]() {
     return `Entity(${this.name})`;
@@ -31,97 +38,37 @@ export class Entity extends SceneEventRequestSystem {
     return this.scene && !this.parent;
   }
 
+  public getFlattenChildren() {
+    const flattenChildren = [];
+    let entity: Entity = this;
+    let i = 0;
+
+    while(entity) {
+      const { children } = entity;
+      flattenChildren.push(...children);
+      entity = flattenChildren[i++];
+    }
+
+    return flattenChildren;
+  }
+
   public getChildren() {
     return [...this.children];
   }
 
-  public async setParent(parent: Entity | null) {
-    this.createTransferEventRequest(parent);
-  }
-
-  public async destroy() {
-    await this.createDestructionEventRequest();
-  }
-
-  private requestEventResolve(event: Scene.Event, eventResolver: Function) {
-    return new Promise<void>((resolve) => {
-      const a = (<Scene.Event.EntityTransferEvent>event).parent;
-      const registerRequest = () => {
-        this.eventRequests.set(event, () => {
-          eventResolver();
-          resolve(void 0);
-        });
-      }
-
-      for (const [registeredEvent] of this.eventRequests) {
-        if (registeredEvent.type === event.type && registeredEvent.target === event.target) {
-          this.eventRequests.delete(registeredEvent)
-          registerRequest();
-          return;
-        }
-      }
-
-      registerRequest();
-    });
-  }
-
-  private setParentLocally(parent: Entity | null) {
-    this.parentEntity = parent;
-  }
-
-  private async createInstantiationEventRequest(scene: Scene) {
-    const event: Scene.Event.EntityInstantiationEvent = {
-      type: Scene.Event.Types.EntityInstatiation,
-      target: this,
-    };
-
-    const resolver = () => {
-      this.parentScene = scene;
+  public setParent(newParent: Entity | null) {
+    if (!this.parentScene) {
+      throw new Error('Cannot set parent to an uninstantiated entity');
     }
 
-    return this.requestEventResolve(event, resolver);
+    return this.parentScene.requestEntityTransformation(this, newParent);
   }
 
-  private async createTransferEventRequest(newParent: Entity | null) {
-    const initialPosition = this.transform.position;
-    const event: Scene.Event.EntityTransferEvent = {
-      type: Scene.Event.Types.EntityTransfer,
-      target: this,
-      parent: newParent,
-    };
-
-    const resolver = () => {
-      this.parent?.children.delete(this);
-      this.parentEntity = newParent;
-
-      if (newParent) {
-        newParent.children.add(this);
-      }
-      
-      this.transform.position = this.transform.position;
-      this.transform.updateRelativeLocalTransform();
+  public destroy() {
+    if (!this.parentScene) {
+      throw new Error('Cannot destroy an uninstantiated entity');
     }
 
-    return this.requestEventResolve(event, resolver);
-  }
-
-  private async createDestructionEventRequest() {
-    const event: Scene.Event.EntityDestructionEvent = {
-      type: Scene.Event.Types.EntityDestruction,
-      target: this,
-    };
-
-    const resolver = () => {
-      this.parent?.children.delete(this);
-      this.parentEntity = null;
-      this.parentScene = null;
-    }
-
-    return this.requestEventResolve(event, resolver);
-  }
-
-  private destroyLocally() {
-    this.parent?.children.delete(this);
-    this.parentEntity = null;
+    return this.parentScene.requestEntityDestruction(this);
   }
 }

@@ -1,11 +1,18 @@
+import { Transformator } from "objectra";
 import { rotatedOffsetPosition } from "../utils/crontext-math";
 import { Entity } from "./entity";
 import { Space } from "./space";
 import { Transform } from "./transform";
 import { Vector } from "./vector";
 
+@Transformator.Register()
 export class EntityTransform {
-  constructor(private readonly entity: Entity) {}
+  @Transformator.ArgumentPassthrough()
+  private readonly entity: Entity;
+  
+  constructor(entity: Entity) {
+    this.entity = entity;
+  }
 
   private globalPosition = Vector.zero;
   private globalScale = Vector.one;

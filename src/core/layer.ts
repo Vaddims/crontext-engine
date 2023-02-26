@@ -1,5 +1,13 @@
+import { Transformator } from "objectra";
+
+@Transformator.Register()
 export class Layer {
-  private constructor(public readonly name: string) {}
+  @Transformator.ArgumentPassthrough()
+  public readonly name: string;
+  constructor(name: string) {
+    this.name = name;
+    Layer.registrations.add(this);
+  }
 
   public [Symbol.toPrimitive]() {
     return this.name;
@@ -13,7 +21,6 @@ export class Layer {
 
   public static create(name: string) {
     const layer = new Layer(name);
-    Layer.registrations.add(layer);
     return layer;
   }
 

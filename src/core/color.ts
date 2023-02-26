@@ -1,12 +1,21 @@
+import { Transformator } from "objectra";
 import { clamp } from "../utils/crontext-math";
 import { staticValuePrebuilder } from "../utils/static-value-prebuilder";
 
 const Prebuild = staticValuePrebuilder<Color>(color => color.duplicate());
 
+@Transformator.Register()
 export class Color {
+  @Transformator.ArgumentPassthrough()
   public readonly red: number;
+  
+  @Transformator.ArgumentPassthrough()
   public readonly green: number;
+
+  @Transformator.ArgumentPassthrough()
   public readonly blue: number;
+
+  @Transformator.ArgumentPassthrough()
   public readonly alpha: number;
 
   public constructor(red: number, green: number, blue: number, alpha = 1) {
