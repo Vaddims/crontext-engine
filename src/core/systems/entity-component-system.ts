@@ -10,7 +10,7 @@ import { Entity } from "../entity";
   // setter: (target: EntityComponentSystem, instance: Component) => target.addInstance(instance),
 })
 export class EntityComponentSystem {
-  private readonly components = new Map<ComponentConstructor, Component>();
+  private readonly hoistingComponents = new Map<ComponentConstructor, Component>();
 
   @Transformator.ArgumentPassthrough()
   readonly entity: Entity;
@@ -20,28 +20,28 @@ export class EntityComponentSystem {
   }
 
   [Symbol.iterator](): IterableIterator<Component> {
-    return this.components.values();
+    return this.hoistingComponents.values();
   }
   
   public baseConstructors() {
-    return this.components.keys();
+    return this.hoistingComponents.keys();
   }
   
   public instances() {
-    return this.components.values();
+    return this.hoistingComponents.values();
   }
 
   public entries() {
-    return this.components.entries();
+    return this.hoistingComponents.entries();
   }
 
   public get size() {
-    return this.components.size;
+    return this.hoistingComponents.size;
   }
 
   private getSharedInstance<T extends ComponentConstructor>(componentConstructor: T) {
     const baseConstructor = Component.getBaseclassOf(componentConstructor);
-    return this.components.get(baseConstructor) ?? null;
+    return this.hoistingComponents.get(baseConstructor) ?? null;
   }
 
   public findOfType<T extends ComponentConstructor>(componentConstructor: T) {
@@ -81,14 +81,13 @@ export class EntityComponentSystem {
   }
 
   public add<T extends ComponentConstructor>(componentConstructor: T) {
-    const baseConstructor = Component.getBaseclassOf(componentConstructor);
-    if (this.components.has(baseConstructor)) {
-      throw new Error(`Component of class ${baseConstructor.name} already exists`);
+    const scene = this.entity.scene;
+
+    if (!scene) {
+      throw new Error('No scene')
     }
 
-    const componentInstance = new componentConstructor(this.entity);
-    this.components.set(baseConstructor, componentInstance);
-    return componentInstance as InstanceType<T>;
+    return scene.requestComponentInstantiation(componentConstructor, this.entity);
   }
 
   // public addInstance<T extends Component>(componentInstance: T) {
@@ -102,7 +101,7 @@ export class EntityComponentSystem {
   // }
 
   public hasInstance<T extends Component>(instance: T) {
-    for (const componentInstance of this.components.values()) {
+    for (const componentInstance of this.hoistingComponents.values()) {
       if (instance === componentInstance) {
         return true;
       }
@@ -112,11 +111,22 @@ export class EntityComponentSystem {
   }
 
   public destroy(componentConstructor: ComponentConstructor) {
-    const baseConstructor = Component.getBaseclassOf(componentConstructor);
-    return this.components.delete(baseConstructor);
+    const scene = this.entity.scene;
+    if (!scene) {
+      throw new Error('No scene')
+    }
+
+    return scene.requestComponentDestruction(componentConstructor, this.entity);
   }
 
   public destoryAll() {
-    this.components.clear();
+    const scene = this.entity.scene;
+    if (!scene) {
+      throw new Error('No scene')
+    }
+
+    for (const [ componentConstructor ] of this.hoistingComponents) {
+      scene.requestComponentDestruction(componentConstructor, this.entity);
+    }
   }
 }

@@ -10,8 +10,10 @@ export class Scene implements Iterable<Entity> {
   private readonly hoistedEntities = new Set<Entity>();
   private readonly entityInstances = new Set<Entity>();
 
-  private readonly actionRequests = new Set<Scene.ActionRequest>();
-  // private readonly typedActionRequestMap = new Map<Scene.ActionRequest.Types, Scene.ActionRequest[]>();
+  private readonly componentInstances = new Set<Component>();
+  
+  private readonly actionRequests: Scene.ActionRequest[] = [];
+  private readonly actionRequestResult = new WeakMap<Scene.ActionRequest, unknown>();
 
   public [Symbol.iterator]() {
     return this.entityInstances.values();
@@ -25,21 +27,49 @@ export class Scene implements Iterable<Entity> {
     return [...this];
   }
 
-  private addActionRequest(actionRequest: Scene.ActionRequest) {
-    this.actionRequests.add(actionRequest);
-    (actionRequest as any).id = Math.floor(Math.random() * 100);
-    // const typedActionRequests = this.typedActionRequestMap.get(actionRequest.type);
-    // const actionRequests = typedActionRequests ?? [];
-    // actionRequests.push(actionRequest);
+  public find(name: string) {
+    return this.getEntities().find(entity => entity.name === name);
+  }
+
+  public getComponents() {
+    const components: Component[] = [];
+    function parseEntity(entity: Entity) {
+      for (const component of entity.components) {
+        components.push(component);
+      }
+
+      const children = entity.getChildren();
+      for (const child of children) {
+        parseEntity(child);
+      }
+    }
+
+    for (const child of this.hoistedEntities) {
+      parseEntity(child);
+    }
     
-    // if (!typedActionRequests) {
-    //   this.typedActionRequestMap.set(actionRequest.type, actionRequests);
-    // }
+    return components;
+  }
+
+  public getComponentsOfType<T extends ComponentConstructor>(type: T) {
+    type Instance = InstanceType<T>;
+    const components = this.getComponents();
+    const targets: Instance[] = [];
+    for (const component of components) {
+      if (component instanceof type) {
+        targets.push(component as Instance);
+      }
+    }
+    
+    return targets;
+  }
+
+  private addActionRequest(actionRequest: Scene.ActionRequest) {
+    this.actionRequests.push(actionRequest);
   }
   
   public requestEntityInstantiation(entity?: Entity): Scene.ActionRequests.EntityInstantiation {
     const entityInstantiationRequest: any = {
-      id: Math.random(),
       type: Scene.ActionRequest.Types.EntityInstantiation,
       origin: entity,
     } as const;
@@ -83,41 +113,41 @@ export class Scene implements Iterable<Entity> {
     return actionEmissionRequest;
   }
 
-  public find(name: string) {
-    return this.getEntities().find(entity => entity.name === name);
+  public requestComponentInstantiation<T extends ComponentConstructor>(componentConstructor: T, entity: Entity) {
+    const componentInstantiationRequest: Scene.ActionRequests.ComponentInstantiation<T> = {
+      type: Scene.ActionRequest.Types.ComponentInstantiation,
+      componentConstructor,
+      entity,
+    };
+
+    this.addActionRequest(componentInstantiationRequest);
+    return componentInstantiationRequest;
   }
 
-  public getComponents() {
-    const components: Component[] = [];
-    function parseEntity(entity: Entity) {
-      for (const component of entity.components) {
-        components.push(component);
-      }
-
-      const children = entity.getChildren();
-      for (const child of children) {
-        parseEntity(child);
-      }
+  public requestComponentDestruction<T extends ComponentConstructor>(componentConstructor: T, entity: Entity) {
+    const componentDestructionRequest: Scene.ActionRequests.ComponentDestruction<T> = {
+      type: Scene.ActionRequest.Types.ComponentDestruction,
+      componentConstructor,
+      entity,
     }
 
-    for (const child of this.hoistedEntities) {
-      parseEntity(child);
-    }
-    
-    return components;
+    return componentDestructionRequest;
   }
 
-  public getComponentsOfType<T extends ComponentConstructor>(type: T) {
-    type Instance = InstanceType<T>;
-    const components = this.getComponents();
-    const targets: Instance[] = [];
-    for (const component of components) {
-      if (component instanceof type) {
-        targets.push(component as Instance);
-      }
+  public instantEntityInstantiation(entity: Entity): Entity | undefined {
+    const instantiationRequest = this.requestEntityInstantiation(entity);
+    this.update();
+    return this.actionRequestResult.get(instantiationRequest) as any;
+  }
+
+  public instantResolve<T extends Scene.ActionRequest>(actionRequest: T) {
+    this.update();
+
+    if (!this.actionRequestResult.has(actionRequest)) {
+      throw new Error('No action request match for instant resolve');
     }
-    
-    return targets;
+
+    return this.actionRequestResult.get(actionRequest) as Scene.ActionRequest.Response<T>;
   }
 
   private resolveEntityInstantitationRequest(instantiationActionRequest: Scene.ActionRequests.EntityInstantiation) {
@@ -181,6 +211,33 @@ export class Scene implements Iterable<Entity> {
     return true;
   }
 
+  private resolveComponentInstantiationRequest(componentInstantiationRequest: Scene.ActionRequests.ComponentInstantiation) {
+    const { componentConstructor, entity } = componentInstantiationRequest;
+    const baseConstructor = Component.getBaseclassOf(componentConstructor);
+    if (entity.components.findOfType(baseConstructor)) {
+      throw new Error(`Component of class ${baseConstructor.name} already exists`);
+    }
+
+    const componentInstance = new componentConstructor(entity);
+    this.componentInstances.add(componentInstance);
+    entity.components['hoistingComponents'].set(baseConstructor, componentInstance);
+    return componentInstance;
+  }
+
+  private resolveComponentDestructionRequest(componentDestructionRequest: Scene.ActionRequests.ComponentDestruction) {
+    const { componentConstructor, entity } = componentDestructionRequest;
+
+    const componentInstance = entity.components['hoistingComponents'].get(componentConstructor);
+    if (!componentInstance) {
+      return false;
+    }
+
+    this.componentInstances.delete(componentInstance);
+    entity.components['hoistingComponents'].delete(componentConstructor);
+    
+    return true;
+  }
+
   private resolvePrimitiveActionRequest(actionRequest: Scene.ActionRequest) {
     const { Types } = Scene.ActionRequest;
 
@@ -193,11 +250,13 @@ export class Scene implements Iterable<Entity> {
       
       case Types.EntityDestruction:
         return this.resolveEntityDestructionRequest(actionRequest);
-    }
-  }
 
-  public update() {
-    this.resolveActionRequests();
+      case Types.ComponentInstantiation:
+        return this.resolveComponentInstantiationRequest(actionRequest);
+
+      case Types.ComponentDestruction:
+        return this.resolveComponentDestructionRequest(actionRequest);
+    }
   }
 
   private resolveActionRequests() {
@@ -240,6 +299,10 @@ export class Scene implements Iterable<Entity> {
 
       // Forced update loop
     } while (currentGeneratorExecutions.size > 0);
+
+    for (const [actionRequest, result] of actionRequestResultMap) {
+      this.actionRequestResult.set(actionRequest, result);
+    }
 
     function resolveGeneratorIteration(generator: AnyGenerator) {
       const generatorActionRequestHistory = generatorActionRequestHistoryMap.get(generator) ?? [];
@@ -385,7 +448,6 @@ export class Scene implements Iterable<Entity> {
         const emissionRequests: Scene.ActionRequests.ActionEmission[] = [];
         // First resolve all primitive action requests
         for (const actionRequest of self.actionRequests) {
-          self.actionRequests.delete(actionRequest);
           if (actionRequest.type === Scene.ActionRequest.Types.ActionEmission) {
             emissionRequests.push(actionRequest);
             continue;
@@ -397,14 +459,20 @@ export class Scene implements Iterable<Entity> {
 
           actionRequestResultMap.set(actionRequest, result);
         }
+
+        self.actionRequests.length = 0;
   
         for (const emissionRequest of emissionRequests) {
           resolveEmissionRequest(emissionRequest);
         }
 
         // Action request hopper like loop
-      } while (self.actionRequests.size > 0);
+      } while (self.actionRequests.length > 0);
     }
+  }
+
+  public update() {
+    this.resolveActionRequests();
   }
 }
 
@@ -414,8 +482,9 @@ export namespace Scene {
       EntityInstantiation,
       EntityDestruction,
       EntityTransformation,
+      ComponentInstantiation,
+      ComponentDestruction,
       ActionEmission,
-      Recache,
     }
 
     export interface Base<T extends Types> {
@@ -424,7 +493,6 @@ export namespace Scene {
 
     export type ActionRequestCollection = ActionRequest[] | readonly ActionRequest[];
 
-    
     export type ValidRequestFormat = ActionRequest | ActionRequestCollection | undefined;
     export type Response<T extends ValidRequestFormat> = (
       T extends ActionRequestCollection ? ActionRequestCollectionResponse<T> :
@@ -436,6 +504,8 @@ export namespace Scene {
       T extends ActionRequests.EntityInstantiation ? Entity : 
       T extends ActionRequests.EntityTransformation ? boolean :
       T extends ActionRequests.EntityDestruction ? boolean :
+      T extends ActionRequests.ComponentInstantiation ? Component :
+      T extends ActionRequests.ComponentDestruction ? boolean :
       T extends ActionRequests.ActionEmission<any, infer U> 
         ? ActionRequest.Emission.ClusterResponse<U> :
       never
@@ -487,6 +557,16 @@ export namespace Scene {
       readonly parent?: Entity | null | undefined;
     }
 
+    export interface ComponentInstantiation<T extends ComponentConstructor = ComponentConstructor> extends ActionRequest.Base<ActionRequest.Types.ComponentInstantiation> {
+      readonly componentConstructor: T;
+      readonly entity: Entity;
+    }
+
+    export interface ComponentDestruction<T extends ComponentConstructor = ComponentConstructor> extends ActionRequest.Base<ActionRequest.Types.ComponentDestruction> {
+      readonly componentConstructor: T;
+      readonly entity: Entity;
+    }
+
     export interface ActionEmission<
       Args extends unknown[] = unknown[], _Return = unknown
     > extends ActionRequest.Base<ActionRequest.Types.ActionEmission> {
@@ -494,14 +574,14 @@ export namespace Scene {
       readonly symbol: symbol;
       readonly args: Args;
     }
-
-    export interface Recache extends ActionRequest.Base<ActionRequest.Types.Recache> {}
   }
 
   export type ActionRequest = (
     | ActionRequests.EntityInstantiation
     | ActionRequests.EntityTransformation
     | ActionRequests.EntityDestruction
+    | ActionRequests.ComponentInstantiation
+    | ActionRequests.ComponentDestruction
     | ActionRequests.ActionEmission<any, any>
   );
 
