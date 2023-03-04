@@ -23,6 +23,7 @@ const boundsOverlaping = (a: Shape, b: Shape) => {
 }
 
 export class PointLight extends LightSource {
+  public recache = true;
   public range = 20;
   public color = Color.white;
   public ignoreOverlapEntity = false;
@@ -39,7 +40,10 @@ export class PointLight extends LightSource {
   }
 
   render(simulationRenderingPipeline: SimulationRenderingPipeline) {
+    this.recache = true;
     const visibilityPolygon = this.getVisibilityPolygon();
+    this.recache = false;
+
     const { path } = visibilityPolygon;
 
     const { remove: removeMask } = simulationRenderingPipeline.createMask(path);
@@ -134,7 +138,7 @@ export class PointLight extends LightSource {
   }
 
   private getVisibilityPolygon() {
-    if (this.visibilityPolygonCache) {
+    if (!this.recache && this.visibilityPolygonCache) {
       return this.visibilityPolygonCache;
     }
     

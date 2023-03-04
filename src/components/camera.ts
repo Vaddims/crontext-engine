@@ -1,4 +1,4 @@
-import { Component, Renderer, Scene, Shape, Transform } from "../core";
+import { Component, Renderer } from "../core";
 import { Color } from "../core/color";
 import { Optic } from "../core/optic";
 import { SimulationRenderer } from "../renderers/simulation-renderer";
@@ -6,7 +6,6 @@ import { Vector } from "../core/vector";
 import { SimulationRenderingPipeline, SimulationRenderingPipelineConstuctor } from "../rendering-pipelines/simulation-rendering-pipeline";
 import { MeshRenderer } from "./mesh-renderer";
 import { LightSource } from "./light";
-import { PointLight } from "./light-sources/point-light";
 import { Layer } from "../core/layer";
 import { Gizmos } from "../core/gizmos";
 import { Rectangle } from "../shapes";
@@ -48,7 +47,7 @@ export class Camera extends Component {
     context.restore();
   }
 
-  public gizmosRender(gizmos: Gizmos) {
+  public [Component.onGizmosRender](gizmos: Gizmos) {
     const bounds = this.getBounds(gizmos.renderer);
     gizmos.highlightVertices(bounds.vertices, Color.blue);
 

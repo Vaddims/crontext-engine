@@ -1,3 +1,8 @@
+import './engine';
+import './input';
+
+export * from './engine';
+export * from './input';
 export * from './color';
 export * from './component';
 export * from './entity';

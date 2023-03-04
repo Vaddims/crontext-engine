@@ -3,8 +3,10 @@ import { Renderer } from "../core/renderer";
 import { Simulation } from "../simulations/simulation";
 
 export class SimulationRenderer extends Renderer {
-  constructor(canvas: HTMLCanvasElement, public simulation = new Simulation()) {
+  public readonly simulation: Simulation;
+  constructor(canvas: HTMLCanvasElement) {
     super(canvas);
+    this.simulation = new Simulation(this);
     this.render();
   }
 

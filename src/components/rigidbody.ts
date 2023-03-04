@@ -23,7 +23,7 @@ export class Rigidbody extends Component {
 
   private readonly updateResolved: Rigidbody[] = [];
 
-  public update() {
+  public [Component.onUpdate]() {
     this.updateResolved.length = 0;
     this.velocity = this.velocity.add(this.acceleration);
     this.velocity = this.velocity.multiply(Vector.one.subtract(this.friction))
@@ -88,7 +88,7 @@ export class Rigidbody extends Component {
   }
 
   public addForce(vector: Vector) {
-    this.acceleration = this.acceleration.add(vector);
+    this.velocity = this.velocity.add(vector);
   }
 
   public gizmosRender(gizmos: Gizmos) {

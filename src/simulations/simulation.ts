@@ -1,6 +1,7 @@
-import { Component } from "../core";
+import { Component, Input, Renderer } from "../core";
 import { Scene } from "../core/scene";
 import { Objectra } from "objectra";
+import { Engine } from "../core/engine";
 
 export enum SimulationUpdateState {
   Active, // Request new updates as time goes on
@@ -14,9 +15,10 @@ export class Simulation {
   private activeScene: Scene;
   private updateState = SimulationUpdateState.Frozen;
   
-  constructor(scene = new Scene) {
-    this.loadedScene = Objectra.duplicate(scene);
+  constructor(public readonly renderer: Renderer) {
+    this.loadedScene = Objectra.duplicate(new Scene());
     this.activeScene = Objectra.duplicate(this.loadedScene);
+    Engine['registeredSimulations'].add(this);
   }
 
   public get scene() {
@@ -54,6 +56,10 @@ export class Simulation {
       this.updateState = SimulationUpdateState.Frozen;
       return;
     }
+
+    Input.emitStaged(this);
+    this.scene.requestComponentActionEmission(Component.onUpdate);
+    this.scene.update();
     
     if (this.updateOnFrameChange) {
       requestAnimationFrame(this.update.bind(this));

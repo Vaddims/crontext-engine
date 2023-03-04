@@ -2,6 +2,7 @@ import { Component, ComponentConstructor } from "./component";
 import { Entity } from "./entity";
 import { Objectra, Transformator } from 'objectra';
 import { pushElementToMapValue } from "../utils/buildin-helpers";
+import type { Camera } from "../components";
 
 @Transformator.Register<Scene>()
 export class Scene implements Iterable<Entity> {
@@ -25,6 +26,10 @@ export class Scene implements Iterable<Entity> {
 
   public getEntities() {
     return [...this];
+  }
+
+  public getCameras() {
+    return this.getComponents().filter(component => component.constructor.name === 'Camera') as Camera[];
   }
 
   public find(name: string) {
@@ -219,6 +224,7 @@ export class Scene implements Iterable<Entity> {
     }
 
     const componentInstance = new componentConstructor(entity);
+    this.requestComponentActionEmission(Component.onAwake);
     this.componentInstances.add(componentInstance);
     entity.components['hoistingComponents'].set(baseConstructor, componentInstance);
     return componentInstance;

@@ -5,8 +5,7 @@ import { Shape } from "../core/shape";
 import { Vector } from "../core/vector";
 import { Optic } from "../core/optic";
 import { rotatedOffsetPosition } from "../utils/crontext-math";
-import { Color, Renderer, Transform } from "../core";
-import { SimulationInspectorRenderer } from "../renderers";
+import { Color, Transform } from "../core";
 
 interface RadialGradientColorStop {
   offset: number;

@@ -1,3 +1,4 @@
+import { Optic } from "./optic";
 import { Vector } from "./vector";
 
 export abstract class Renderer {
@@ -15,6 +16,16 @@ export abstract class Renderer {
   }
 
   public abstract render(): void;
+
+  public canvasPointToCoordinates(optic: Optic, screenPoint: Vector) {
+    optic.pixelsPerUnit = this.pixelsPerUnit;
+    const canvasCenter = this.canvasSize.divide(2);
+    const opticPixelOffset = optic.scenePosition.multiply(optic.scaledPixelsPerUnit()).multiply(Vector.reverseY);
+    const centerPixelOffset = canvasCenter.subtract(opticPixelOffset);
+    const relativePixelOffset = screenPoint.subtract(centerPixelOffset);
+    const scenePosition = relativePixelOffset.divide(optic.scaledPixelsPerUnit()).multiply(Vector.reverseY)
+    return scenePosition;
+  }
 
   public get pixelsPerUnit() {
     return this.canvas[this.scaleDependenceAxis] / this.unitFit;
