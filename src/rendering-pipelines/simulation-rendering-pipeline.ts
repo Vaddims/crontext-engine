@@ -67,7 +67,7 @@ export class SimulationRenderingPipeline<T extends SimulationRenderer = Simulati
     context.closePath();
   }
 
-  public renderLine(pivot: Vector, end: Vector, color: Color) {
+  public renderLine(pivot: Vector, end: Vector, color: Color, width = 2) {
     const { context } = this;
 
     const pivotRenderingPosition = this.getRenderingPosition(pivot);
@@ -78,8 +78,9 @@ export class SimulationRenderingPipeline<T extends SimulationRenderer = Simulati
     context.moveTo(...pivotRenderingPosition.raw);
     context.lineTo(...endRenderingPosition.raw);
     context.closePath();
-    context.lineWidth = 2;
+    context.lineWidth = width;
     context.lineCap = 'round';
+    context.lineWidth = width;
     context.strokeStyle = color.toString();
     context.lineJoin = context.lineCap = 'round';
     context.stroke();

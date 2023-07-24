@@ -56,7 +56,7 @@ export class Vector {
 
   public rotation() {
     const angle = Math.atan2(this.y, this.x);
-    return angle >= 0 ? angle : angle + Math.PI * 2;
+    return (angle >= 0 ? angle : angle + Math.PI * 2) - Math.PI / 2;
   }
 
   public isEqual(vector: Vector) {

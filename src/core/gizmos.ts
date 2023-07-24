@@ -15,8 +15,8 @@ export class Gizmos {
     return this.renderer.inspector.simulation.scene;
   }
 
-  public renderLine(pivot: Vector, end: Vector, color = Color.black) {
-    this.renderingPipeline.renderLine(pivot, end, color);
+  public renderLine(pivot: Vector, end: Vector, color = Color.black, width = 2) {
+    this.renderingPipeline.renderLine(pivot, end, color, width);
   }
 
   public renderDirectionalLine(pivot: Vector, vector: Vector, color = Color.black) {

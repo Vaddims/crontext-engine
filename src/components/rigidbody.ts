@@ -1,10 +1,11 @@
-import { Color, Component, Entity, Renderer } from "../core";
+import { Color, Component, Entity, Renderer, Space } from "../core";
 import { Collision } from "../core/collision";
 import { Gizmos } from "../core/gizmos";
 import { Vector } from "../core/vector";
 import { CircleCollider } from "./colliders/circle-collider";
 import { Collider } from "./collider";
 import { PlaneCollider } from "./colliders/plane-collider";
+import { rotatedOffsetPosition } from "../utils";
 
 type ColliderConstructor = new (entity: Entity) => Collider;
 type RigidbodyResolver<A extends Collider, B extends Collider> = 
@@ -76,7 +77,7 @@ export class Rigidbody extends Component {
     for (const entry of Rigidbody.resolvers) {
       const [ keys, resolver ] = entry;
       
-      type ColliderConstructors = [ColliderConstructor, ColliderConstructor];      
+      type ColliderConstructors = [ColliderConstructor, ColliderConstructor];
 
       const colliderConstructors = colliders.map(collider => collider.constructor) as ColliderConstructors;
       if (!keys.includes(colliderConstructors[0]) || !keys.includes(colliderConstructors[1])) {
@@ -87,8 +88,13 @@ export class Rigidbody extends Component {
     }
   }
 
-  public addForce(vector: Vector) {
-    this.velocity = this.velocity.add(vector);
+  public addForce(vector: Vector, space = Space.global) {
+    if (space === Space.global) {
+      this.velocity = this.velocity.add(vector);
+      return;
+    }
+
+    this.velocity = this.velocity.add(rotatedOffsetPosition(vector, this.entity.transform.rotation));
   }
 
   public gizmosRender(gizmos: Gizmos) {

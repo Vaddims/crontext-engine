@@ -105,14 +105,21 @@ export class Scene implements Iterable<Entity> {
   }
 
   public requestComponentActionEmission<Args extends any[], Return>(
-    symbol: symbol, args: Args = [] as any, initiator?: Component,
+   symbol: symbol, options?: Scene.ActionRequests.ActionEmission.Options<Args, Return>
   ): Scene.ActionRequests.ActionEmission<Args, Return> {
-    const actionEmissionRequest = {
+    const {
+      args = [],
+      target = Scene.ActionRequests.ActionEmission.ExecutionLevels.Broadcast,
+      initiator,
+    } = options ?? {};
+
+    const actionEmissionRequest: Scene.ActionRequests.ActionEmission<Args, Return> = {
       type: Scene.ActionRequest.Types.ActionEmission,
       symbol,
-      args: args ?? [] as any[],
+      args: args as any,
+      target,
       initiator,
-    } as const;
+    };
 
     this.addActionRequest(actionEmissionRequest);
     return actionEmissionRequest;
@@ -224,7 +231,10 @@ export class Scene implements Iterable<Entity> {
     }
 
     const componentInstance = new componentConstructor(entity);
-    this.requestComponentActionEmission(Component.onAwake);
+    this.requestComponentActionEmission(Component.onAwake, {
+      target: [componentInstance],
+    });
+
     this.componentInstances.add(componentInstance);
     entity.components['hoistingComponents'].set(baseConstructor, componentInstance);
     return componentInstance;
@@ -417,11 +427,43 @@ export class Scene implements Iterable<Entity> {
     }
 
     function initializeEmissionRequest(actionEmissionRequest: Scene.ActionRequests.ActionEmission) {
-      const receivers = self.getComponents() as Component.ImplicitActionMethodWrapper[];
+      const { ExecutionLevels } = Scene.ActionRequests.ActionEmission;
 
-      return receivers
-        .map((component) => initializeComponentRequestMethod(actionEmissionRequest, component))
-        .filter(Boolean) as Scene.ActionRequest.Emission.MethodInitialization[];
+      const { 
+        initiator,
+        target = Scene.ActionRequests.ActionEmission.ExecutionLevels.EntityBroadcast,
+      } = actionEmissionRequest;
+
+      const resolve = (receivers: Component[]) => {
+        return (receivers as Component.ImplicitActionMethodWrapper[])
+          .map((component) => initializeComponentRequestMethod(actionEmissionRequest, component))
+          .filter(Boolean) as Scene.ActionRequest.Emission.MethodInitialization[];
+      }
+
+      if (Array.isArray(target)) {
+        return resolve(target);
+      }
+
+      switch (target) {
+        case ExecutionLevels.Broadcast:
+          return resolve(self.getComponents());
+        
+        case ExecutionLevels.EntityBroadcast:
+          if (!initiator) {
+            throw new Error('Cannot broadcast emission to entity without initiator');
+          }
+
+          return resolve([...initiator.entity.components.instances()]);
+
+        case ExecutionLevels.EntityDeepBroadcast:
+          if (!initiator) {
+            throw new Error('Cannot broadcast emission to entity without initiator');
+          }
+
+          const entities = initiator.entity.getFlattenChildren()
+          const components = entities.map(entity => [...entity.components]).flat();
+          return resolve(components);
+      }
     }
 
     function resolveEmissionRequest(emissionRequest: Scene.ActionRequests.ActionEmission) {
@@ -579,6 +621,21 @@ export namespace Scene {
       readonly initiator?: Component | undefined;
       readonly symbol: symbol;
       readonly args: Args;
+      readonly target?: ActionEmission.ExecutionLevels | Component[];
+    }
+
+    export namespace ActionEmission {
+      export interface Options<Args extends unknown[] = unknown[], _Return = unknown> {
+        readonly initiator?: Component | undefined;
+        readonly args?: Args;
+        readonly target?: ActionEmission.ExecutionLevels | Component[];
+      }
+
+      export enum ExecutionLevels {
+        Broadcast,
+        EntityBroadcast,
+        EntityDeepBroadcast,
+      }
     }
   }
 

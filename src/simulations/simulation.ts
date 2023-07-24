@@ -44,7 +44,10 @@ export class Simulation {
       const coldStart = this.updateState === SimulationUpdateState.Frozen;
       this.updateState = SimulationUpdateState.Active;
       if (coldStart) {
-        activeScene.requestComponentActionEmission(Component.onStart, []);
+        activeScene.requestComponentActionEmission(Component.onStart, {
+          target: Scene.ActionRequests.ActionEmission.ExecutionLevels.Broadcast,
+        });
+
         activeScene.update();
         requestAnimationFrame(this.update.bind(this));
       }

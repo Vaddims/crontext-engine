@@ -30,7 +30,11 @@ export class Component {
     return (...args: T extends Component.ActionMethod<infer A> ? A : []) => {
       const requestArguments = args ?? [];
       type ResultType = T extends Component.ActionMethod<any, infer U, any, any> ? U : never;
-      return scene.requestComponentActionEmission<typeof requestArguments, ResultType>(actionSymbol, requestArguments, this);
+      return scene.requestComponentActionEmission<typeof requestArguments, ResultType>(actionSymbol, {
+        args: requestArguments,
+        target: Scene.ActionRequests.ActionEmission.ExecutionLevels.EntityBroadcast,
+        initiator: this,
+      });
     }
   }
 
