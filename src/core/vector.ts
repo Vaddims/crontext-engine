@@ -156,6 +156,10 @@ export class Vector {
     return a.multiply(t).add(b.multiply(1 - t));
   }
 
+  public static round(vector: Vector) {
+    return new Vector(Math.round(vector.x), Math.round(vector.y));
+  }
+
   public static get random() {
     return new Vector(Math.random() * 2 - 1, Math.random() * 2 - 1);
   }

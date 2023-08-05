@@ -22,11 +22,35 @@ export class Entity {
   public readonly layers = new EntityLayerSystem();
   private readonly children = new Set<Entity>();
 
+  private readonly cache: { [key: string]: any } = {};
+
+  public establishCacheConnection<T>(key: string) {
+    const cache = this.cache;
+    
+    return {
+      get(): T | undefined {
+        return cache[key];
+      },
+
+      set(value: T) {
+        cache[key] = value;
+      },
+
+      modify(newCacheCb: (cache: T | undefined) => T) {
+        cache[key] = newCacheCb(cache[key]);
+      }
+    }
+  }
+
   public [Symbol.toPrimitive]() {
     return `Entity(${this.name})`;
   }
 
   public get scene() {
+    // if (!this.parentScene) {
+    //   throw new Error(`No scene assigned to entity ${this.name}`);
+    // }
+
     return this.parentScene;
   }
 

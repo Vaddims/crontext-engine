@@ -27,30 +27,6 @@ export class SimulationRenderingPipeline<T extends SimulationRenderer = Simulati
     return position.subtract(this.optic.scenePosition).multiply(this.optic.scaledPixelsPerUnit(), Vector.reverseY);
   }
 
-  public renderEntityMesh(meshRenderer: MeshRenderer) {
-    const { context } = this;
-    const { entity, shape, color } = meshRenderer;
-    const { position, rotation, scale } = entity.transform;
-
-    const opticRotation = this.optic.rotation;
-    const transformedShape = shape.withTransform(Transform.setRotation(rotation - opticRotation).setScale(scale));
-
-    const renderingPosition = this.getRenderingPosition(position);
-    const translate = rotatedOffsetPosition(renderingPosition, opticRotation);
-
-    context.save();
-    context.translate(...translate.raw);
-    this.defineShapePath(transformedShape);
-    context.fillStyle = context.strokeStyle = color.toString();
-    if (transformedShape.vertices.length >= 3) {
-      context.fill();
-    } else {
-      context.stroke();
-    }
-    
-    context.restore();
-  }
-
   public defineShapePath(shape: Shape) {
     const { context } = this;
 
@@ -65,6 +41,34 @@ export class SimulationRenderingPipeline<T extends SimulationRenderer = Simulati
       context.lineTo(vertex.x, -vertex.y);
     }
     context.closePath();
+  }
+
+  public renderShape(shape: Shape, position: Vector, opticRotation: number, color: Color) {
+    const { context } = this;
+
+    const renderingPosition = this.getRenderingPosition(position);
+    const translate = rotatedOffsetPosition(renderingPosition, opticRotation);
+
+    context.save();
+    context.translate(...translate.raw);
+    this.defineShapePath(shape);
+    context.fillStyle = context.strokeStyle = color.toString();
+    if (shape.vertices.length >= 3) {
+      context.fill();
+    } else {
+      context.stroke();
+    }
+    
+    context.restore();
+  }
+
+  public renderEntityMesh(meshRenderer: MeshRenderer) {
+    const { entity, shape, color } = meshRenderer;
+    const { position, rotation, scale } = entity.transform;
+
+    const opticRotation = this.optic.rotation;
+    const transformedShape = shape.withTransform(Transform.setRotation(rotation - opticRotation).setScale(scale));
+    this.renderShape(transformedShape, position, opticRotation, color);
   }
 
   public renderLine(pivot: Vector, end: Vector, color: Color, width = 2) {

@@ -92,6 +92,13 @@ export class Shape {
     return new Shape(vertices);
   }
 
+  public getScale() {
+    return new Vector(
+      Math.abs(this.bounds.vertices[1].x - this.bounds.vertices[0].x),
+      Math.abs(this.bounds.vertices[2].y - this.bounds.vertices[1].y),
+    );
+  }
+
   public get bounds() {
     if (this.cachedBounds) {
       return this.cachedBounds;

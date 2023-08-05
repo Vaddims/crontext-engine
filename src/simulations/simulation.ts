@@ -38,6 +38,7 @@ export class Simulation {
   }
 
   public start() {
+    console.log('start');
     const { activeScene } = this;
 
     if (this.updateOnFrameChange) {
@@ -52,6 +53,8 @@ export class Simulation {
         requestAnimationFrame(this.update.bind(this));
       }
     }
+
+    this.activeScene.recacheSpatialPartition();
   }
   
   public update() {

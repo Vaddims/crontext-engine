@@ -2,11 +2,16 @@ import { Component, ComponentConstructor } from "./component";
 import { Entity } from "./entity";
 import { Objectra, Transformator } from 'objectra';
 import { pushElementToMapValue } from "../utils/buildin-helpers";
-import type { Camera } from "../components";
+import { type MeshRenderer, type Camera } from "../components";
+import { Vector } from "./vector";
+import { Shape } from "./shape";
+import { Color } from "./color";
+import { SpatialPartitionCluster } from "./spatial-partition/spatial-partition-cluster";
+import { SpatialPartition } from "./spatial-partition/spatial-partition";
 
 @Transformator.Register<Scene>()
 export class Scene implements Iterable<Entity> {
-  public name = 'Scene';
+  public name = 'Scene' + Math.random();
 
   private readonly hoistedEntities = new Set<Entity>();
   private readonly entityInstances = new Set<Entity>();
@@ -15,6 +20,84 @@ export class Scene implements Iterable<Entity> {
   
   private readonly actionRequests: Scene.ActionRequest[] = [];
   private readonly actionRequestResult = new WeakMap<Scene.ActionRequest, unknown>();
+
+  public readonly spatialPartition = new SpatialPartition<Entity>(3);
+
+  public recacheEntitySpatialPartition(entity: Entity) {
+    const getBelongingClusters = (bounds: Shape, level: number) => {
+      const belongingClusters = [];
+      boundloop: for (let i = 0; i < bounds.vertices.length; i++) {
+        const cluster = SpatialPartitionCluster.createFromPoint(bounds.vertices[i], level, this.spatialPartition.clusterOpacity);
+        if (i === 0) {
+          belongingClusters.push(cluster);
+          continue;
+        }
+
+        for (const belongingCluster of belongingClusters) {
+          if (cluster.identifier === belongingCluster.identifier) {
+            continue boundloop;
+          }
+        }
+
+        belongingClusters.push(cluster);
+      }
+
+      return belongingClusters;
+    }
+
+    // TODO Use collider instead of mesh renderer
+    const meshRenderer = Array.from(entity.components).find(component => component.constructor.name === 'MeshRenderer') as MeshRenderer;
+    if (!meshRenderer) {
+      return;
+    }
+
+    const bounds = new Shape(meshRenderer.relativeVerticesPosition()).bounds;
+    const boundsScale = bounds.getScale();
+    const maxScale = Math.max(boundsScale.x, boundsScale.y);
+
+    function getBaseLog(x: number, y: number) {
+      return Math.log(y) / Math.log(x);
+    }
+
+    const epsilonBias = 0.01;
+    const clusterLevel = Math.ceil(getBaseLog(this.spatialPartition.clusterOpacity, maxScale + epsilonBias));
+
+    const entitySPCCache = entity.establishCacheConnection<SpatialPartitionCluster[] | null>('spc');
+    const boundClusters = entitySPCCache.get();
+    const bcs = boundClusters ? [...boundClusters] : null;
+
+    // console.log(Object.keys(this.spatialPartition['headBranch']?.branches ?? {}).length);
+    entitySPCCache.set([]);
+
+    // remove previous clusters
+    if (bcs) {
+      for (const boundCluster of bcs) {
+        this.spatialPartition.modifyClusterElements(boundCluster, (elements) => {
+          elements.delete(entity);
+        });
+      }
+    }
+
+    // add new clusters
+    const newBoundClusters = getBelongingClusters(bounds, clusterLevel);
+    for (const boundCluster of newBoundClusters) {
+      this.spatialPartition.injectBranchAndMerge(boundCluster, [entity]);
+    }
+    
+    entitySPCCache.modify((existingClusters => (
+      existingClusters ? existingClusters.concat(...newBoundClusters) : [...newBoundClusters]
+    )));
+    // console.log(Object.keys(this.spatialPartition['headBranch']?.branches ?? {}).length);
+  }
+
+  public recacheSpatialPartition() {
+    const entities = this.getEntities();
+    for (const entity of entities) {
+      this.recacheEntitySpatialPartition(entity);
+    }
+
+    // console.log(this.spatialPartition['headBranch'])
+  }
 
   public [Symbol.iterator]() {
     return this.entityInstances.values();
@@ -291,7 +374,7 @@ export class Scene implements Iterable<Entity> {
     const currentGeneratorExecutions = new Set<AnyGenerator>(); // Executions that are currently resolving
 
     let updateQuantity = 0;
-    const MAX_UPDATE_QUANTITY = 100;
+    const MAX_UPDATE_QUANTITY = 10000;
     useActionRequestHopperResolve();
 
     do {

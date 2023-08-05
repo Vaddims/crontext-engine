@@ -1,5 +1,6 @@
 import { SimulationInspectorRenderer } from "../renderers";
 import { SimulationInspectorRenderingPipeline } from "../rendering-pipelines";
+import { Rectangle } from "../shapes";
 import { Color } from "./color";
 import { Entity } from "./entity";
 import { Renderer } from "./renderer";
@@ -26,6 +27,10 @@ export class Gizmos {
 
   public renderCircle(center: Vector, radius: number, color = Color.black) {
     this.renderingPipeline.renderCircle(center, radius, color);
+  }
+
+  public renderRectangle(center: Vector, size: number, color = Color.black) {
+    this.renderingPipeline.renderShape(new Rectangle().withScale(size), center, 0, color);
   }
 
   public renderDisk(center: Vector, radius: number, color = Color.black) {
