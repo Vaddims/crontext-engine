@@ -16,7 +16,7 @@ export class SpatialPartitionCluster {
   readonly position: Vector;
 
   constructor(level: number, clusterOpacity: number, position: Vector) {
-    this.identifier = `c${level}:${position.x}:${position.y}`;
+    this.identifier = `C${level}/${position.x}:${position.y}`;
     this.position = position;
     this.level = level;
     this.clusterOpacity = clusterOpacity;

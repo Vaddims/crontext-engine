@@ -1,4 +1,4 @@
-import { Component, Renderer } from "../core";
+import { Component, Entity, Renderer, Shape } from "../core";
 import { Color } from "../core/color";
 import { Optic } from "../core/optic";
 import { SimulationRenderer } from "../renderers/simulation-renderer";
@@ -9,7 +9,11 @@ import { LightSource } from "./light";
 import { Layer } from "../core/layer";
 import { Gizmos } from "../core/gizmos";
 import { Rectangle } from "../shapes";
+import { SpatialPartitionCluster } from "../core/spatial-partition/spatial-partition-cluster";
+import { BoundingBox } from "../shapes/bounding-box";
+import { getBaseLog } from "../utils";
 
+// TODO NOT TO RENDER UNEEDED ENTITIES LIKE IN GIZMOS EXAMPLE
 export class Camera extends Component {
   public SimulationRenderingPipeline: SimulationRenderingPipelineConstuctor = SimulationRenderingPipeline;
 
@@ -18,6 +22,9 @@ export class Camera extends Component {
   public canvasRelativeSize = Vector.one;
 
   public background = Color.white;
+
+  protected viewportEntities = new Set<Entity>();
+  protected boundingBoxViewportTraceEntities = new Set<Entity>();
 
   render(renderer: SimulationRenderer) {
     const { context, canvasSize } = renderer;
@@ -50,24 +57,51 @@ export class Camera extends Component {
   public [Component.onGizmosRender](gizmos: Gizmos) {
     const bounds = this.getBounds(gizmos.renderer);
     gizmos.highlightVertices(bounds.vertices, Color.blue);
+  }
 
-    for (const entity of gizmos.renderer.simulation.scene) {
-      const vertices = entity.components.find(MeshRenderer)?.relativeVerticesPosition();
-      if (!vertices) {
+  protected viewportCullingMask(renderer: Renderer) {
+    const { scene } = this.entity;
+    if (!scene) {
+      throw new Error();
+    }
+
+    const viewportBoundingBox = this.getBounds(renderer);
+    const boundingBoxViewportTraceEntities = scene.spatialPartition.getBoundingBoxHeightTraceElements(viewportBoundingBox);
+
+    const viewportEntities = new Set<Entity>();
+    for (const entity of boundingBoxViewportTraceEntities) {
+      const meshRenderer = entity.components.find(MeshRenderer);
+      if (!meshRenderer) {
         continue;
       }
 
-      // const positionedShape = new Shape(vertices);
-      // if (positionedShape.overlaps(bounds)) {
-      //   gizmos.highlightVertices(positionedShape.vertices, Color.red);
-      // }
+      if (!BoundingBox.boundsOverlap(viewportBoundingBox, new Shape(meshRenderer.relativeVerticesPosition()).bounds)) {
+        continue;
+      }
+
+      viewportEntities.add(entity);
+    }
+
+    return {
+      boundingBoxViewportTraceEntities,
+      viewportEntities,
     }
   }
   
   protected renderScene(renderer: SimulationRenderer, renderingPipelineInstance: SimulationRenderingPipeline) {
-    const { scene } = renderer.simulation;
+    this.boundingBoxViewportTraceEntities.clear();
+    this.viewportEntities.clear();
 
-    for (const entity of scene) {
+    const {
+      boundingBoxViewportTraceEntities,
+      viewportEntities,
+    } = this.viewportCullingMask(renderer);
+    
+    this.boundingBoxViewportTraceEntities = boundingBoxViewportTraceEntities;
+    this.viewportEntities = viewportEntities;
+
+    // console.log(this.viewportEntities.size)
+    for (const entity of this.viewportEntities) {
       if (this.layerMask.some(layerMask => entity.layers.has(layerMask))) {
         continue;
       }

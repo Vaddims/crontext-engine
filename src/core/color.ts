@@ -37,6 +37,7 @@ export class Color {
   @Prebuild public static readonly white = new Color(255, 255, 255);
   @Prebuild public static readonly black = new Color(0, 0, 0);
   @Prebuild public static readonly yellow = new Color(255, 255, 0);
+  @Prebuild public static readonly orange = new Color(255, 125, 0);
   @Prebuild public static readonly red = new Color(255, 0, 0);
   @Prebuild public static readonly green = new Color(0, 255, 0);
   @Prebuild public static readonly blue = new Color(0, 0, 255);

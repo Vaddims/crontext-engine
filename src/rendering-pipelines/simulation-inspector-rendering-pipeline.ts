@@ -107,17 +107,16 @@ export class SimulationInspectorRenderingPipeline extends SimulationRenderingPip
     context.restore();
   }
 
-  public highlightMesh(meshRenderer: MeshRenderer) {
+  public highlightMesh(meshRenderer: MeshRenderer, color = Color.blue) {
     const { context } = this;
     const renderingPosition = this.getRenderingPosition(meshRenderer.transform.position);
     const opticRotation = this.optic.rotation;
-    const transformedShape = meshRenderer.shape
-      .withRotation(meshRenderer.transform.rotation - opticRotation);
+    const transformedShape = meshRenderer.shape.withTransform(Transform.setRotation(meshRenderer.transform.rotation - opticRotation).setScale(meshRenderer.transform.scale));
 
     context.save();
     context.translate(...renderingPosition.raw);
     this.defineShapePath(transformedShape);
-    context.strokeStyle = new Color(255, 255, 0).toString();
+    context.strokeStyle = color.toString();
     context.lineWidth = 2;
     context.stroke();
     context.restore();

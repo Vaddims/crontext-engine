@@ -166,6 +166,14 @@ export class SimulationRenderingPipeline<T extends SimulationRenderer = Simulati
     context.restore()
     
   }
+
+  public outlineShape(shape: Shape, color = Color.black) {
+    for (let i = 0; i < shape.vertices.length; i++) {
+      const vertex = shape.vertices[i];
+      const nextVertex = i === shape.vertices.length - 1 ? shape.vertices[0] : shape.vertices[i + 1];
+      this.renderLine(vertex, nextVertex, color);
+    }
+  }
 }
 
 export interface SimulationRenderingPipelineConstuctor {

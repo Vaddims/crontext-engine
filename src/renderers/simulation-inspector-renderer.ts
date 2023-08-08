@@ -7,8 +7,9 @@ import { SimulationInspector } from "../simulations/simulation-inspector";
 import { Vector } from "../core/vector";
 import { Camera } from "../components/camera";
 import { Gizmos } from "../core/gizmos";
-import { Component, Entity } from "../core";
+import { Component, Entity, Shape, Transform } from "../core";
 import { Rectangle } from "../shapes";
+import { BoundingBox } from "../shapes/bounding-box";
 
 export class SimulationInspectorRenderer extends Renderer {
   public readonly inspector: SimulationInspector;
@@ -60,12 +61,19 @@ export class SimulationInspectorRenderer extends Renderer {
   protected onClick(event: MouseEvent) {
     this.inspector.handleClick(event, this.canvasSize.divide(2));
   }
+
+  public getBounds(renderer: Renderer) {
+    const { unitFit, pixelRatio } = renderer;
+    const boundaryScale = Vector.one.multiply(unitFit, pixelRatio, this.inspector.optic.scale);
+    const boundary = new Rectangle().withTransform(new Transform(this.inspector.optic.scenePosition, this.inspector.optic.scale, this.inspector.optic.rotation).setScale(boundaryScale));
+    return boundary;
+  }
   
   public render(): void {
     const renderStartStamp = performance.now();
 
     const { context, canvasSize } = this;
-    const { scene } = this.inspector.simulation;
+    const { scene, renderer } = this.inspector.simulation;
 
     context.save();
     context.clearRect(0, 0, ...canvasSize.raw);
@@ -92,9 +100,24 @@ export class SimulationInspectorRenderer extends Renderer {
 
     renderingPipeline.renderMeshMarkup(this.canvasSize);
     
-    const visibleEntities = scene.getEntities(); // TODO REWORK WITH RENDERING LAYERS
-    
-    for (const entity of visibleEntities) {
+    const bounds = this.getBounds(renderer);
+    const boundingBoxViewportTraceEntities = scene.spatialPartition.getBoundingBoxHeightTraceElements(bounds);
+
+    const viewportEntities = new Set<Entity>();
+    for (const entity of boundingBoxViewportTraceEntities) {
+      const meshRenderer = entity.components.find(MeshRenderer);
+      if (!meshRenderer) {
+        continue;
+      }
+
+      if (!BoundingBox.boundsOverlap(bounds, new Shape(meshRenderer.relativeVerticesPosition()).bounds)) {
+        continue;
+      }
+
+      viewportEntities.add(entity);
+    }
+
+    for (const entity of viewportEntities) {
       const meshRenderer = entity.components.find(MeshRenderer);
       if (!meshRenderer) {
         continue;
@@ -103,7 +126,24 @@ export class SimulationInspectorRenderer extends Renderer {
       renderingPipeline.renderEntityMesh(meshRenderer);
     }
 
-    for (const entity of visibleEntities) {
+    const cameras = scene.getCameras();
+    for (const camera of cameras) {
+      for (const entity of camera['boundingBoxViewportTraceEntities']) {
+        const meshRenderer = entity.components.find(MeshRenderer);
+        if (!meshRenderer) {
+          continue;
+        }
+      }
+
+      for (const entity of camera['viewportEntities']) {
+        const meshRenderer = entity.components.find(MeshRenderer);
+        if (!meshRenderer) {
+          continue;
+        }
+      }
+    }
+
+    for (const entity of scene.getEntities()) {
       for (const component of entity.components) {
         component[Component.onGizmosRender]?.(gizmos);
       }

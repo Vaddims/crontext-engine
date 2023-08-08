@@ -75,3 +75,7 @@ export function lineWithDiretionIntersection(pivot: Vector, direction: Vector, s
 export function lerp(a: number, b: number, t: number) {
   return a * t + b * (1 - t);
 }
+
+export function getBaseLog(x: number, y: number) {
+  return Math.log(y) / Math.log(x);
+}

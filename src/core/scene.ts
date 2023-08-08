@@ -3,9 +3,7 @@ import { Entity } from "./entity";
 import { Objectra, Transformator } from 'objectra';
 import { pushElementToMapValue } from "../utils/buildin-helpers";
 import { type MeshRenderer, type Camera } from "../components";
-import { Vector } from "./vector";
 import { Shape } from "./shape";
-import { Color } from "./color";
 import { SpatialPartitionCluster } from "./spatial-partition/spatial-partition-cluster";
 import { SpatialPartition } from "./spatial-partition/spatial-partition";
 
@@ -65,8 +63,6 @@ export class Scene implements Iterable<Entity> {
     const entitySPCCache = entity.establishCacheConnection<SpatialPartitionCluster[] | null>('spc');
     const boundClusters = entitySPCCache.get();
     const bcs = boundClusters ? [...boundClusters] : null;
-
-    // console.log(Object.keys(this.spatialPartition['headBranch']?.branches ?? {}).length);
     entitySPCCache.set([]);
 
     // remove previous clusters
@@ -81,13 +77,12 @@ export class Scene implements Iterable<Entity> {
     // add new clusters
     const newBoundClusters = getBelongingClusters(bounds, clusterLevel);
     for (const boundCluster of newBoundClusters) {
-      this.spatialPartition.injectBranchAndMerge(boundCluster, [entity]);
+      this.spatialPartition.injectBranch(boundCluster, [entity]);
     }
     
     entitySPCCache.modify((existingClusters => (
       existingClusters ? existingClusters.concat(...newBoundClusters) : [...newBoundClusters]
     )));
-    // console.log(Object.keys(this.spatialPartition['headBranch']?.branches ?? {}).length);
   }
 
   public recacheSpatialPartition() {
@@ -374,7 +369,7 @@ export class Scene implements Iterable<Entity> {
     const currentGeneratorExecutions = new Set<AnyGenerator>(); // Executions that are currently resolving
 
     let updateQuantity = 0;
-    const MAX_UPDATE_QUANTITY = 10000;
+    const MAX_UPDATE_QUANTITY = 100000;
     useActionRequestHopperResolve();
 
     do {

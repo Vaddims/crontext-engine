@@ -1,5 +1,8 @@
+import { everyArrayElementIsEqual } from 'objectra/dist/utils';
 import { SpatialPartitionCluster } from './spatial-partition-cluster';
 import { Transformator } from 'objectra';
+import { Shape } from '../shape';
+import { getBaseLog } from '../../utils';
 
 @Transformator.Register()
 export class SpatialPartition<T> {
@@ -10,6 +13,249 @@ export class SpatialPartition<T> {
 
   constructor(clusterOpacity: number) {
     this.clusterOpacity = clusterOpacity;
+  }
+
+  public [Symbol.iterator]() {
+    const subBranches = this.headBranch ? this.getFlattenSubBranches(this.headBranch) : [];
+    return  subBranches.values();
+  }
+
+  public getFlattenSubBranches(branchRelatedData: SpatialPartitionCluster | SpatialPartition.ClusterBranch<T>) {
+    const targetBranch = branchRelatedData instanceof SpatialPartitionCluster 
+    ? this.getClusterBranch(branchRelatedData)
+    : branchRelatedData;
+
+    const flattenBranches = [targetBranch];
+
+    let i = 0;
+    while (i < flattenBranches.length) {
+      const branch = flattenBranches[i];
+      const subBranches = Object.values(branch.branches);
+      flattenBranches.push(...subBranches);
+      i++;
+    }
+
+    flattenBranches.unshift();
+
+    return flattenBranches;
+  }
+
+  public getClusterBranch(cluster: SpatialPartitionCluster) {    
+    if (!this.headBranch) {
+      return this.createBranch(cluster);
+    }
+
+    if (cluster.identifier === this.headBranch.cluster.identifier) {
+      return this.headBranch;
+    }
+
+    if (cluster.level === this.headBranch.cluster.level) {
+      // Parallel branch to head (not in head tree)
+      return this.createBranch(cluster);
+    }
+
+    if (cluster.level < this.headBranch.cluster.level) {
+      if (!this.clusterBelongsToCluster(cluster, this.headBranch.cluster)) {
+        return this.createBranch(cluster);
+      }
+
+      // Cluster is a nested sub branch of the head branch
+      const lookupPath = this.getClusterLookupPath(cluster, this.headBranch.cluster.level);
+      const lookdownPath = [...lookupPath].reverse();
+
+      let currentBranch = this.headBranch;
+      for (const pathCluster of lookdownPath) {
+        const nextBranch = currentBranch.branches[pathCluster.identifier];
+        if (!nextBranch) {
+          return this.createBranch(cluster);
+        }
+
+        currentBranch = currentBranch.branches[pathCluster.identifier];
+      }
+
+      return currentBranch;
+    }
+
+    if (!this.clusterBelongsToCluster(this.headBranch.cluster, cluster)) {
+      return this.createBranch(cluster);
+    }
+
+    // Head cluster is a nested sub branch of the provided cluster
+    const lookupPath = this.getClusterLookupPath(this.headBranch.cluster, cluster.level);
+    lookupPath.shift();
+    const lookdownPath = [...lookupPath].reverse();
+
+    const newHeadBranch = this.createBranch(cluster);
+    let currentBranch = newHeadBranch;
+    for (const pathCluster of lookdownPath) {
+      const subBranch = this.createBranch(pathCluster);
+      currentBranch = currentBranch.branches[subBranch.cluster.identifier] = subBranch;
+    }
+
+    currentBranch.branches[this.headBranch.cluster.identifier] = this.headBranch;
+    return newHeadBranch;
+  }
+
+  public getRelativlyHigherBranch(branch: SpatialPartition.ClusterBranch<T>, steps: number) {
+    const targetLevel = branch.cluster.level + steps;
+    const leveledCluster = SpatialPartitionCluster.createFromPoint(branch.cluster.getSpacePosition(), targetLevel, this.clusterOpacity);
+    return this.getClusterBranch(leveledCluster);
+  }
+
+  public getHeightTrace(cluster: SpatialPartitionCluster) {    
+    if (!this.headBranch) {
+      return [];
+    }
+
+    const branches: SpatialPartition.ClusterBranch<T>[] = [this.headBranch];
+    
+    const lookdownPath = this.getClusterLookupPath(cluster, this.headBranch.cluster.level).reverse();
+
+    let workBranch = this.headBranch;
+    for (const pathCluster of lookdownPath) {
+      workBranch = workBranch.branches[pathCluster.identifier];
+      if (!workBranch) {
+        return branches;
+      }
+
+      branches.push(workBranch);
+    }
+
+    branches.push(...this.getFlattenSubBranches(workBranch));
+    return branches;
+  }
+
+  public getBoundingBoxHeightTraceElements(shape: Shape) {
+    const EPSILON_BIAS = 0.01;
+  
+    const boundingScale = shape.getScale();
+    const maxScale = Math.max(boundingScale.x, boundingScale.y);
+    const clusterLevel = Math.ceil(getBaseLog(this.clusterOpacity, maxScale + EPSILON_BIAS));
+
+    const getBelongingClusters = (bounds: Shape, level: number) => {
+      const belongingClusters = [];
+      boundloop: for (let i = 0; i < bounds.vertices.length; i++) {
+        const cluster = SpatialPartitionCluster.createFromPoint(bounds.vertices[i], level, this.clusterOpacity);
+        if (i === 0) {
+          belongingClusters.push(cluster);
+          continue;
+        }
+
+        for (const belongingCluster of belongingClusters) {
+          if (cluster.identifier === belongingCluster.identifier) {
+            continue boundloop;
+          }
+        }
+
+        belongingClusters.push(cluster);
+      }
+
+      return belongingClusters;
+    }
+
+    const clusters = getBelongingClusters(shape.bounds, clusterLevel);
+
+    const elements = new Set<T>();
+    for (const cluster of clusters) {
+      const branches = this.getHeightTrace(cluster);
+      for (const element of branches.map(branch => [...branch.elements]).flat()) {
+        elements.add(element);
+      }
+    }
+
+    return elements;
+  }
+
+
+  public injectBranch(branchRelatedData: SpatialPartitionCluster | SpatialPartition.ClusterBranch<T>, elements: T[] = []) {
+    const injectableBranch = branchRelatedData instanceof SpatialPartitionCluster 
+    ? this.getClusterBranch(branchRelatedData) 
+    : branchRelatedData;
+
+    for (const element of elements) {
+      injectableBranch.elements.add(element);
+    }
+
+    if (!this.headBranch) {
+      this.headBranch = injectableBranch;
+    }
+
+    const minBranchLevel = Math.min(this.headBranch.cluster.level, injectableBranch.cluster.level);
+    const overflowClusters = {
+      targetCluster: [] as SpatialPartitionCluster[],
+      headCluster: [] as SpatialPartitionCluster[],
+    }
+
+    const optionalLastElement = <T>(arr: T[], fallback: T) => arr[arr.length - 1] ?? fallback;
+
+    let comparisonHeadCluster = this.headBranch.cluster; 
+    let comparisonTargetCluster = injectableBranch.cluster;
+
+    let currentLevel = minBranchLevel;
+    while (comparisonHeadCluster.identifier !== comparisonTargetCluster.identifier) {
+      currentLevel++;
+      
+      if (comparisonHeadCluster.level < currentLevel) {
+        const cluster = SpatialPartitionCluster.createFromPoint(comparisonHeadCluster.getSpacePosition(), currentLevel, this.clusterOpacity);
+        overflowClusters.headCluster.push(cluster);
+      }
+
+      if (comparisonTargetCluster.level < currentLevel) {
+        const cluster = SpatialPartitionCluster.createFromPoint(comparisonTargetCluster.getSpacePosition(), currentLevel, this.clusterOpacity);
+        overflowClusters.targetCluster.push(cluster);
+      }
+
+      comparisonHeadCluster = optionalLastElement(overflowClusters.headCluster, this.headBranch.cluster);
+      comparisonTargetCluster = optionalLastElement(overflowClusters.targetCluster, injectableBranch.cluster);
+    }
+
+    if (overflowClusters.headCluster.length > 0 && overflowClusters.targetCluster.length > 0) { 
+      // Head cluster and target cluster will be extended to a common branch (higher from current head branch)
+      const topLevelOverflowCluster = overflowClusters.headCluster[overflowClusters.headCluster.length - 1];
+      const newHeadBranch = this.getClusterBranch(topLevelOverflowCluster); // automatic merged with the head as its tree child
+
+      // Fill inter clusters between the new head branch and the target cluster
+      const targetOverflowLookdownPath = [...overflowClusters.targetCluster].reverse();
+      targetOverflowLookdownPath.shift();
+
+      let currentBranch = newHeadBranch;
+      for (const pathCluster of targetOverflowLookdownPath) {
+        const branch = this.getClusterBranch(pathCluster);
+        currentBranch = currentBranch.branches[pathCluster.identifier] = branch;
+      }
+
+      currentBranch.branches[injectableBranch.cluster.identifier] = injectableBranch;
+      this.headBranch = newHeadBranch;
+      return injectableBranch;
+    } else if (overflowClusters.headCluster.length > 0) {
+      // Head branch will be injected to the new target cluster branch
+      // The `getClusterBranch` populate the branch with the head branch if it is below the requested branch
+      this.headBranch = injectableBranch;
+    } else if (overflowClusters.targetCluster.length > 0) {
+      // Target cluster branch will be injected to the head branch
+      const targetOverflowLookdownPath = [...overflowClusters.targetCluster].reverse();
+      targetOverflowLookdownPath.shift();
+
+      let currentBranch = this.headBranch;
+      for (const pathCluster of targetOverflowLookdownPath) {
+        const branch = this.getClusterBranch(pathCluster);
+        currentBranch = currentBranch.branches[pathCluster.identifier] = branch;
+      }
+
+      currentBranch.branches[injectableBranch.cluster.identifier] = injectableBranch;
+    } else { 
+      // The cluster branch and the head branch are the same branch
+      this.headBranch.branches = { ...this.headBranch.branches, ...injectableBranch.branches };
+    }
+  }
+
+  public modifyClusterElements(cluster: SpatialPartitionCluster, mutator: (elements: Set<T>) => void) {
+    const branch = this.getClusterBranch(cluster);
+    mutator(branch.elements);
+
+    if (branch.elements.size === 0) {
+      this.ejectEmptyClusterTreeTrace(cluster);
+    }
   }
 
   private createBranch(cluster: SpatialPartitionCluster, elements?: T[]): SpatialPartition.ClusterBranch<T> {
@@ -33,192 +279,7 @@ export class SpatialPartition<T> {
     return parallelClusterToHigherClusterLevel.identifier === higherCluster.identifier;
   }
 
-  private getClusterBranch(cluster: SpatialPartitionCluster) {    
-    if (!this.headBranch) {
-      return this.createBranch(cluster);
-    }
-
-    // console.log(cluster.identifier, 'requested cluster get. This is the current head', Objectra.duplicate(this.headBranch))
-
-    if (cluster.identifier === this.headBranch.cluster.identifier) {
-      return this.headBranch;
-    }
-
-    if (cluster.level === this.headBranch.cluster.level) {
-      return this.createBranch(cluster); // parallel branch which is not in the tree
-    }
-
-    // // console.log(this.headBranch.branches)
-
-    if (cluster.level < this.headBranch.cluster.level) {
-      if (this.clusterBelongsToCluster(cluster, this.headBranch.cluster)) {
-        // sub of head
-        // // console.log('1')
-        const lookupPath = this.getClusterLookupPath(cluster, this.headBranch.cluster.level);
-        const lookdownPath = [...lookupPath].reverse();
-
-        let currentBranch = this.headBranch;
-        for (const pathCluster of lookdownPath) {
-          const nextBranch = currentBranch.branches[pathCluster.identifier];
-          if (!nextBranch) {
-            // // console.log()
-            // console.log('create branch for', pathCluster.identifier, 'no sub bruch *');
-            const branch = this.createBranch(pathCluster);
-            currentBranch.branches[pathCluster.identifier] = branch;
-          }
-          currentBranch = currentBranch.branches[pathCluster.identifier];
-        }
-
-        // // console.log('>>', currentBranch)
-        return currentBranch;
-      }
-
-      // // console.log('2');
-      // console.log('CREATE branch for', cluster.identifier, 'not assigned to the head and lower level');
-      return this.createBranch(cluster);
-    }
-
-    if (this.clusterBelongsToCluster(this.headBranch.cluster, cluster)) {
-      // // console.log('3');
-      // head is sub of provided cluster
-      const lookupPath = this.getClusterLookupPath(this.headBranch.cluster, cluster.level);
-      lookupPath.shift();
-      const lookdownPath = [...lookupPath].reverse();
-
-      const newHeadBranch = this.createBranch(cluster);
-      let currentBranch = newHeadBranch;
-      for (const pathCluster of lookdownPath) {
-        // console.log('CREATE branch for', pathCluster.identifier, 'cluster is above head');
-        const subBranch = this.createBranch(pathCluster);
-        currentBranch.branches[subBranch.cluster.identifier] = subBranch;
-        currentBranch = subBranch;
-      }
-
-      currentBranch.branches[this.headBranch.cluster.identifier] = this.headBranch;
-
-      return newHeadBranch;
-    }
-
-    // // console.log('4');
-
-    // console.log('CREATE branch for', cluster.identifier, 'cluster is below head but not parallel');
-    return this.createBranch(cluster);
-  }
-
-  public getRelativlyHigherBranch(branch: SpatialPartition.ClusterBranch<T>, steps: number) {
-    const targetLevel = branch.cluster.level + steps;
-    return this.getClusterBranch(SpatialPartitionCluster.createFromPoint(branch.cluster.getSpacePosition(), targetLevel, this.clusterOpacity));
-  }
-
-  public injectBranchAndMerge(branchRelatedData: SpatialPartitionCluster | SpatialPartition.ClusterBranch<T>, elements: T[] = []) {
-    // console.log('inject request');
-    const injectableBranch = branchRelatedData instanceof SpatialPartitionCluster ? this.getClusterBranch(branchRelatedData) : branchRelatedData;
-    const log = (s: SpatialPartition.ClusterBranch<T>) => `${s.cluster.identifier} => ${Object.values(s.branches).map(x => x.cluster.identifier).join(',')}`
-
-    if (!this.headBranch) {
-      this.headBranch = injectableBranch;
-    }
-    // console.log('injecting', injectableBranch.cluster.identifier)
-
-    const minBranchLevel = Math.min(this.headBranch.cluster.level, injectableBranch.cluster.level);
-    const overflowClusters = {
-      targetCluster: [] as SpatialPartitionCluster[],
-      headCluster: [] as SpatialPartitionCluster[],
-    }
-
-
-    const optionalLastElement = <T>(arr: T[], fallback: T) => arr[arr.length - 1] ?? fallback;
-
-    let comparisonHeadCluster = optionalLastElement(overflowClusters.headCluster, this.headBranch.cluster); 
-    let comparisonTargetCluster = optionalLastElement(overflowClusters.targetCluster, injectableBranch.cluster);
-
-    let currentLevel = minBranchLevel;
-    while (comparisonHeadCluster.identifier !== comparisonTargetCluster.identifier) {
-      currentLevel++;
-      
-      if (comparisonHeadCluster.level < currentLevel) {
-        const cluster = SpatialPartitionCluster.createFromPoint(comparisonHeadCluster.getSpacePosition(), currentLevel, this.clusterOpacity);
-        overflowClusters.headCluster.push(cluster);
-      }
-
-      if (comparisonTargetCluster.level < currentLevel) {
-        const cluster = SpatialPartitionCluster.createFromPoint(comparisonTargetCluster.getSpacePosition(), currentLevel, this.clusterOpacity);
-        overflowClusters.targetCluster.push(cluster);
-      }
-
-      if (currentLevel > 1000) {
-        throw new Error('Overtop 1000');
-      }
-
-      comparisonHeadCluster = optionalLastElement(overflowClusters.headCluster, this.headBranch.cluster);
-      comparisonTargetCluster = optionalLastElement(overflowClusters.targetCluster, injectableBranch.cluster);
-    } // 2 clusters much identifiers
-
-    for (const element of elements) {
-      injectableBranch.elements.add(element);
-    }
-
-    if (overflowClusters.headCluster.length > 0 && overflowClusters.targetCluster.length > 0) { // Head and target will be extended to a common branch (higher from head)
-      // console.log('head and target will be extended', log(this.headBranch))
-      const topLevelOverflowCluster = overflowClusters.headCluster[overflowClusters.headCluster.length - 1];
-      const newHeadBranch = this.getClusterBranch(topLevelOverflowCluster); // automatic merged with the head as its tree child
-      // fill inter clusters between new head and the current head
-      // console.log('got from up request (new future head)', Objectra.duplicate(newHeadBranch));
-      
-      let currentBranch = newHeadBranch;
-
-      const targetOverflowLookdownPath = [...overflowClusters.targetCluster].reverse();
-      targetOverflowLookdownPath.shift();
-
-      for (const pathCluster of targetOverflowLookdownPath) {
-        const branch = this.getClusterBranch(pathCluster);
-        currentBranch = currentBranch.branches[pathCluster.identifier] = branch;
-      }
-
-      currentBranch.branches[injectableBranch.cluster.identifier] = injectableBranch;
-
-      this.headBranch = newHeadBranch;
-
-      // // console.log('END OF head and target will be extended', log(this.headBranch))
-      return injectableBranch;
-    } else if (overflowClusters.headCluster.length > 0) { // Head is injected to the target
-      //injectableBranch
-      // console.log('head will be injected to the target', log(this.headBranch))
-      // // console.log('END OF head will be injected to the target', log(this.headBranch))
-      this.headBranch = injectableBranch;
-    } else if (overflowClusters.targetCluster.length > 0) { // Target is injected to the head
-      // console.log('target will be injected to the head', log(this.headBranch))
-      const targetOverflowLookdownPath = [...overflowClusters.targetCluster].reverse();
-      targetOverflowLookdownPath.shift();
-
-      let currentBranch = this.headBranch;
-      for (const pathCluster of targetOverflowLookdownPath) {
-        const branch = this.getClusterBranch(pathCluster);
-        // console.log('branch', branch.cluster.identifier, 'has', Object.values(branch.branches).length, 'branches. set', pathCluster.identifier, 'to', currentBranch.cluster.identifier);
-        currentBranch = currentBranch.branches[pathCluster.identifier] = branch;
-      }
-
-      // console.log('finally set', injectableBranch.cluster.identifier, 'to', currentBranch.cluster.identifier)
-      currentBranch.branches[injectableBranch.cluster.identifier] = injectableBranch;
-      // // console.log('END OF target will be injected to the head', log(this.headBranch))
-    } else { // Target and head are the same branches
-      // console.log('same branch, merging', log(this.headBranch));
-      this.headBranch.branches = { ...this.headBranch.branches, ...injectableBranch.branches };
-      // // console.log('END OF same branch, merging', log(this.headBranch));
-    }
-  }
-
-  public modifyClusterElements(cluster: SpatialPartitionCluster, modifier: (elements: Set<T>) => void) {
-    const branch = this.getClusterBranch(cluster);
-    modifier(branch.elements);
-
-    if (branch.elements.size === 0) {
-      // console.log(cluster.identifier, 'is empty');
-      this.ejectEmptyClusterTreeTrace(cluster);
-    }
-  }
-
-  public ejectEmptyClusterTreeTrace(cluster: SpatialPartitionCluster) {
+  private ejectEmptyClusterTreeTrace(cluster: SpatialPartitionCluster) {
     if (!this.headBranch) {
       return false;
     }
@@ -231,12 +292,16 @@ export class SpatialPartition<T> {
       return false;
     }
 
-    const providedClusterBranch = this.getClusterBranch(cluster);
-
-    if (cluster.identifier === this.headBranch.cluster.identifier) {
-      const subBranches = this.getRecursiveSubBranches(providedClusterBranch);
+    const getFlattenBrancheElements = (branch: SpatialPartition.ClusterBranch<T>) => {
+      const subBranches = this.getFlattenSubBranches(branch);
       const branchElementQuantity = subBranches.reduce((size, targetCluster) => size + targetCluster.elements.size, 0);
-      if (branchElementQuantity > 0) {
+      return branchElementQuantity;
+    }
+
+    let currentBranch = this.getClusterBranch(cluster);
+    if (cluster.identifier === this.headBranch.cluster.identifier) {
+      const flattenBrancheElements = getFlattenBrancheElements(currentBranch);
+      if (flattenBrancheElements > 0) {
         return false;
       }
 
@@ -244,15 +309,13 @@ export class SpatialPartition<T> {
       return true;
     }
 
-    let currentBranch = providedClusterBranch;
     const lookupPath = this.getClusterLookupPath(cluster, this.headBranch.cluster.level);
     lookupPath.shift();
     lookupPath.push(this.headBranch.cluster);
+
     for (const pathCluster of lookupPath) {
-      const subBranches = this.getRecursiveSubBranches(currentBranch);
-      const branchElementQuantity = subBranches.reduce((size, targetCluster) => size + targetCluster.elements.size, currentBranch.elements.size);
-      if (branchElementQuantity > 0) {
-        // console.log('more than 0 on', pathCluster.identifier)
+      const flattenBrancheElements = getFlattenBrancheElements(currentBranch);
+      if (flattenBrancheElements > 0) {
         return false;
       }
 
@@ -261,61 +324,30 @@ export class SpatialPartition<T> {
       currentBranch = parentBranch;
     }
 
-    // console.log(currentBranch.cluster.identifier, this.headBranch.cluster.identifier)
-
-    if (currentBranch.cluster.identifier === this.headBranch.cluster.identifier) {      
-      if (this.headBranch.elements.size === 0) {
-        let newHeadBranch = this.headBranch;
-        do {
-          const subBranches = Object.values(newHeadBranch.branches);
-          if (subBranches.length === 0) {
-            this.headBranch = null;
-            return;
-          }
-
-          if (subBranches.length > 1) {
-            break;
-          }
-          
-          // if lenght is 1
-          newHeadBranch = subBranches[0];
-        } while (true);
-
-        this.headBranch = newHeadBranch;
-      }
+    if (currentBranch.cluster.identifier !== this.headBranch.cluster.identifier) {
+      return true;
     }
 
+    if (this.headBranch.elements.size > 0) {
+      return true;
+    }
+
+    let newHeadBranch = this.headBranch;
+    let subBranches = Object.values(newHeadBranch.branches);
+    while (subBranches.length <= 1) {
+      if (subBranches.length === 0) {
+        this.headBranch = null;
+        return true;
+      }
+
+      newHeadBranch = subBranches[0];
+      subBranches = Object.values(newHeadBranch.branches);
+    };
+
+    this.headBranch = newHeadBranch;
     return true;
   }
 
-  public [Symbol.iterator]() {
-    const a = this.headBranch
-    if (!this.headBranch) {
-      return [].values();
-    }
-
-    let i = 0;
-
-    const clusters: SpatialPartitionCluster[] = [];
-    function extractCluster(branch: SpatialPartition.ClusterBranch<T>) {
-      i++;
-
-      if (i > 10000) {
-        // // console.log(a);
-        throw '';
-      }
-
-      clusters.push(branch.cluster);
-      for (const subbranch of Object.values(branch.branches)) {
-        extractCluster(subbranch);
-      }
-    }
-
-    extractCluster(this.headBranch);
-    return clusters.values();
-  }
-
-  /** Starts from the provided cluster level and ends one position before stop level */
   private getClusterLookupPath(cluster: SpatialPartitionCluster, stopLevel: number) {
     const lookupPath = [];
     for (let i = cluster.level; i < stopLevel; i++) {
@@ -325,59 +357,14 @@ export class SpatialPartition<T> {
 
     return lookupPath;
   }
-
-  getRecursiveSubBranches(branch: SpatialPartition.ClusterBranch<T>) {
-    const branches: SpatialPartition.ClusterBranch<T>[] = [branch];
-
-    let i = 0;
-    while(i !== branches.length) {
-      const targetBranch = branches[i];
-      branches.push(...Object.values(targetBranch.branches));
-      i++;
-    }
-
-    return branches;
-  }
-
-  getInterLevelBranches(cluster: SpatialPartitionCluster) {
-    if (!this.headBranch) {
-      throw new Error('Not populated');
-    }
-    
-    const branches: SpatialPartition.ClusterBranch<T>[] = [this.headBranch];
-    
-    const lookupPath = this.getClusterLookupPath(cluster, this.headBranch.cluster.level);
-
-    let workBranch = this.headBranch;
-    for (const lookupCluster of [...lookupPath].reverse()) {
-      workBranch = workBranch.branches[lookupCluster.identifier];
-      if (!workBranch) {
-        return branches;
-      }
-
-      branches.push(workBranch);
-    }
-
-    const subBrunches: SpatialPartition.ClusterBranch<T>[] = [workBranch];
-    let i = 0;
-    while (i !== subBrunches.length) {
-      const targetBranch = subBrunches[i];
-      subBrunches.push(...Object.values(targetBranch.branches));
-      i++;
-    }
-
-    subBrunches.shift();
-
-    branches.push(...subBrunches);
-    return branches;
-  }
 }
 
 export namespace SpatialPartition {
   export interface ClusterBranch<T> {
     readonly cluster: SpatialPartitionCluster;
     elements: Set<T>;
-    branches: { // using object with mapped identifiers for c++ speed (v8 transofrmation)
+    branches: { 
+      // Use object with mapped identifiers for c++ speed after optimization
       [key: string]: ClusterBranch<T>;
     };
   }
