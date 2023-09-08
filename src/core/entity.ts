@@ -1,3 +1,4 @@
+import { nanoid } from "nanoid";
 import { EntityTransform } from "./entity-transform";
 import { Scene } from "./scene";
 import { EntityComponentSystem } from "./systems/entity-component-system";
@@ -13,6 +14,7 @@ export enum EntitySceneStatus {
 @Transformator.Register()
 export class Entity {
   public name = "Entity";
+  public readonly id = nanoid();
   
   private parentScene: Scene | null = null;
   private parentEntity: Entity | null = null;

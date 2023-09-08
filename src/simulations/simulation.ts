@@ -2,6 +2,7 @@ import { Component, Input, Renderer } from "../core";
 import { Scene } from "../core/scene";
 import { Objectra } from "objectra";
 import { Engine } from "../core/engine";
+import { Time } from "../core/time";
 
 export enum SimulationUpdateState {
   Active, // Request new updates as time goes on
@@ -10,10 +11,15 @@ export enum SimulationUpdateState {
 }
 
 export class Simulation {
+  
+  public interimUpdateQuantity = 1;
+
   public updateOnFrameChange = true;
   private loadedScene: Scene;
   private activeScene: Scene;
   private updateState = SimulationUpdateState.Frozen;
+
+  private lastUpdateTime = performance.now();
   
   constructor(public readonly renderer: Renderer) {
     this.loadedScene = Objectra.duplicate(new Scene());
@@ -38,7 +44,6 @@ export class Simulation {
   }
 
   public start() {
-    console.log('start');
     const { activeScene } = this;
 
     if (this.updateOnFrameChange) {
@@ -63,9 +68,17 @@ export class Simulation {
       return;
     }
 
-    Input.emitStaged(this);
-    this.scene.requestComponentActionEmission(Component.onUpdate);
-    this.scene.update();
+    Engine['contextSimulation'] = this;
+    // this.lastUpdateTime = performance.now();
+
+    for (let update = 0; update < this.interimUpdateQuantity; update++) {
+      Input.emitStaged(this);
+      this.scene.requestComponentActionEmission(Component.onUpdate);
+      this.scene.update();
+    }
+
+    this.lastUpdateTime = performance.now();
+    Engine['contextSimulation'] = null;
     
     if (this.updateOnFrameChange) {
       requestAnimationFrame(this.update.bind(this));
@@ -80,5 +93,9 @@ export class Simulation {
 
   public get isRunning() {
     return this.updateState === SimulationUpdateState.Active;
+  }
+
+  public addSceneListener() {
+
   }
 }

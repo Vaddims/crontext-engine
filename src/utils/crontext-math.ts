@@ -1,5 +1,6 @@
 import { Shape } from "../core";
 import { Vector } from "../core/vector";
+import { Circle } from "../shapes";
 
 export function clamp(number: number, min: number, max: number) {
   return Math.min(Math.max(number, min), max);
@@ -14,6 +15,44 @@ export function rotatedOffsetPosition(vector: Vector, rotation: number): Vector 
   const x = vector.x * cos(rotation) - vector.y * sin(rotation);
   const y = vector.x * sin(rotation) + vector.y * cos(rotation);
   return new Vector(x, y);
+}
+
+export function pointSegmentDistance(point: Vector, segment: Shape.Segment) {
+  const isolatedSegmentVector = segment[1].subtract(segment[0]);
+  const isolatedSegmentStartToPoint = point.subtract(segment[0]);
+
+  const projection = Vector.dot(isolatedSegmentStartToPoint, isolatedSegmentVector);
+  const segmentToPointLenghtSquared = isolatedSegmentVector.lenghtSquared;
+  const distance = projection / segmentToPointLenghtSquared;
+
+  let contactPoint: Vector;
+  if (distance <= 0) {
+    contactPoint = segment[0];
+  } else if (distance >= 1) {
+    contactPoint = segment[1];
+  } else {
+    contactPoint = segment[0].add(isolatedSegmentVector.multiply(distance));
+  }
+
+  const distanceSquared = Vector.distanceSquared(point, contactPoint);
+
+  return {
+    distanceSquared,
+    contactPoint,
+  }
+
+  // const segmentVector = segment[1].subtract(segment[0]);
+  // const pointToStartVector = point.subtract(segment[0]);
+
+  // const segmentLengthSquared = Vector.dot(segmentVector, segmentVector);
+  // if (segmentLengthSquared === 0) {
+  //   return Vector.distance(point, segment[0]);
+  // }
+
+  // const t = Math.max(0, Math.min(1, Vector.dot(pointToStartVector, segmentVector) / segmentLengthSquared));
+  // const projectedPoint = segment[0].add(segmentVector.multiply(t));
+  
+  // return Vector.distance(point, projectedPoint);
 }
 
 export function lineWithLineIntersection(segment1: Shape.Segment, segment2: Shape.Segment) {
@@ -78,4 +117,23 @@ export function lerp(a: number, b: number, t: number) {
 
 export function getBaseLog(x: number, y: number) {
   return Math.log(y) / Math.log(x);
+}
+
+export function perpendicularProjection(shape: Shape, axis: Vector) {
+  let min = Infinity;
+  let max = -Infinity;
+
+  for (const vertex of shape) {
+    const projected = axis.x * vertex.x + axis.y * vertex.y;
+
+    if (projected < min) {
+      min = projected;
+    }
+
+    if (projected > max) {
+      max = projected;
+    }
+  }
+
+  return [min, max];
 }

@@ -30,7 +30,7 @@ export class DetailedCollision<Colliders extends [Collider, Collider]> {
     return this.colliders[index].entity.transform.position.subtract(this.initialColliderPositions[index]); 
   }
 
-  public toCollision<T extends Colliders[number]>(collider: T) {
-    return new Collision(collider);
-  }
+  // public toCollision<T extends Colliders[number]>(collider: T) {
+  //   return new Collision(collider);
+  // }
 }

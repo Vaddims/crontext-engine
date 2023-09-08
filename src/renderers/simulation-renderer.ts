@@ -1,4 +1,5 @@
 import { Camera } from "../components/camera";
+import { Engine } from "../core";
 import { Renderer } from "../core/renderer";
 import { Simulation } from "../simulations/simulation";
 
@@ -8,6 +9,7 @@ export class SimulationRenderer extends Renderer {
     super(canvas);
     this.simulation = new Simulation(this);
     this.render();
+    Engine['registeredRenderers'].add(this);
   }
 
   public render() {

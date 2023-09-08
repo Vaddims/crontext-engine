@@ -4,8 +4,10 @@
   "description": "",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "scripts": {
-  },
+  "scripts": {},
   "author": "Vadym Iefremov <vadym.iefremov@gmail.com> (https://www.vaddims.com/)",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "nanoid": "^4.0.2"
+  }
 }

@@ -16,3 +16,4 @@ export * from './shape';
 export * from './space';
 export * from './transform';
 export * from './ray'
+export * from './time'

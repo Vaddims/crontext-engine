@@ -54,25 +54,25 @@ export class PlaneCollider extends Collider {
     return this.startPoint.subtract(closestVector);
   }
 
-  public collisionDetection<T extends Collider>(collider: T): Collision<T> | null {
-    type CollisionDetectionResult = Collision<T> | null;
+  // public collisionDetection<T extends Collider>(collider: T): Collision<T> | null {
+  //   type CollisionDetectionResult = Collision<T> | null;
 
-    if (collider instanceof CircleCollider) {
-      return this.circleCollisionDetection(collider) as CollisionDetectionResult;
-    }
+  //   if (collider instanceof CircleCollider) {
+  //     return this.circleCollisionDetection(collider) as CollisionDetectionResult;
+  //   }
 
-    return null;
-  }
+  //   return null;
+  // }
 
-  public circleCollisionDetection(collider: CircleCollider) {
-    const closestPoint = this.closestPointToPoint(collider.position);
-    const offset = closestPoint.subtract(collider.position);
-    if (offset.magnitude <= collider.radius) {
-      return new Collision(collider);
-    }
+  // public circleCollisionDetection(collider: CircleCollider) {
+  //   const closestPoint = this.closestPointToPoint(collider.position);
+  //   const offset = closestPoint.subtract(collider.position);
+  //   if (offset.magnitude <= collider.radius) {
+  //     return new Collision(collider);
+  //   }
 
-    return null;
-  }
+  //   return null;
+  // }
 
   public penetrationResolution<T extends Collider>(collider: T): void {
     if (collider instanceof CircleCollider) {

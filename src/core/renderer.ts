@@ -1,3 +1,4 @@
+import { Simulation } from "../simulations";
 import { Optic } from "./optic";
 import { Vector } from "./vector";
 
@@ -5,6 +6,8 @@ export abstract class Renderer {
   public readonly context: CanvasRenderingContext2D;
   public scaleDependenceAxis: 'width' | 'height' = 'height';
   public unitFit = 10;
+
+  public abstract readonly simulation: Simulation;
 
   constructor(public readonly canvas: HTMLCanvasElement) {
     const context = this.canvas.getContext('2d');

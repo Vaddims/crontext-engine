@@ -57,7 +57,7 @@ export class CollisionPenetrationResolution {
       const penetrationDepth = active.collider.radius + passive.collider.radius - distance.magnitude;
       
       if (distance.isEqual(Vector.zero)) {
-        const randomVector = Vector.random.normalized;
+        const randomVector = Vector.random().normalized;
         const penetrationResolution = randomVector.multiply(penetrationDepth).divide(2);
         active.collider.transform.translate(penetrationResolution);
         passive.collider.transform.translate(penetrationResolution.multiply(Vector.reverse));

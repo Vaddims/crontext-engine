@@ -16,6 +16,12 @@ export class Gizmos {
     return this.renderer.inspector.simulation.scene;
   }
 
+  public useMask(vertices: readonly Vector[] | Vector[], renderInMask: () => void) {
+    const { remove: removeMask } = this.renderingPipeline.createMask(vertices);
+    renderInMask();
+    removeMask();
+  }
+
   public renderLine(pivot: Vector, end: Vector, color = Color.black, width = 2) {
     this.renderingPipeline.renderLine(pivot, end, color, width);
   }

@@ -30,13 +30,8 @@ export class PointLight extends LightSource {
   
   private readonly raycastInaccuracy = 0.00001;
 
-  private fps = 0;
-  private rerateFPS = true;
-
   start() {
-    setInterval(() => {
-      this.rerateFPS = true;
-    }, 500);
+
   }
 
   render(simulationRenderingPipeline: SimulationRenderingPipeline) {
@@ -87,15 +82,8 @@ export class PointLight extends LightSource {
         gizmos.renderFixedText(path[i], `${i + 1}`, 0.35, Color.red);
       }
     }
-
-    if (this.rerateFPS) {
-      this.rerateFPS = false;
-      this.fps = Math.min(60, Number(gizmos.renderer.fps.toFixed(0)));
-    }
     
     const list = [
-      `${this.fps} fps`,
-      '',
       `${visibilityPolygon.checkpointVertices.length} total checkpoint vertices`,
       `${visibilityPolygon.obsticlesWithObsticlesInterimVertices.length} entity to entity overlaping vertices`,
       `${visibilityPolygon.obsticlesWithBoundsInterimVertices.length} entity overlap vertices with light bounds`,

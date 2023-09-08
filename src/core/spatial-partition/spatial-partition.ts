@@ -177,7 +177,7 @@ export class SpatialPartition<T> {
     }
 
     if (!this.headBranch) {
-      this.headBranch = injectableBranch;
+      return this.headBranch = injectableBranch;
     }
 
     const minBranchLevel = Math.min(this.headBranch.cluster.level, injectableBranch.cluster.level);

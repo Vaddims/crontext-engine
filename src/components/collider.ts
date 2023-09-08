@@ -2,6 +2,7 @@ import { Color, Component, Shape, Transform, Vector } from "../core";
 import { Collision } from "../core/collision";
 import { Gizmos } from "../core/gizmos";
 import { Rectangle } from "../shapes";
+import type { CircleCollider } from "./colliders/circle-collider";
 
 export interface Collider {
   collisionDetection<T extends Collider>(collider: T): Collision<T> | null;
@@ -11,19 +12,55 @@ export interface Collider {
 
 export class Collider extends Component implements Collider {
   public shape: Shape = new Rectangle();
-  public isTrigger = false;
+  public behaviour = Collider.Behaviour.Dynamic;
 
-  gizmosRender(gizmos: Gizmos) {
-    const { vertices } = this.shape;
-    for (let i = 0; i < vertices.length; i++) {
-      const vertex = vertices[i];
-      const nextVertex = i === vertices.length - 1 ? vertices[0] : vertices[i + 1];
-      gizmos.renderLine(vertex.add(this.position), nextVertex.add(this.position), Color.yellow);
-    }
+  public get isDynamic() {
+    return this.behaviour === Collider.Behaviour.Dynamic;
+  }
+
+  public get isTrigger() {
+    return this.behaviour === Collider.Behaviour.Trigger;
+  }
+
+  public get isStatic() {
+    return this.behaviour === Collider.Behaviour.Static;
   }
 
   public relativeVerticesPosition() {
     const transformedShape = this.shape.withTransform(Transform.setRotation(this.transform.rotation).setScale(this.transform.scale));
     return transformedShape.vertices.map(vertex => vertex.add(this.transform.position))
+  }
+
+  public relativeShape() {
+    return new Shape(this.relativeVerticesPosition());
+  }
+
+  static circleIntersect(circleA: CircleCollider, circleB: CircleCollider) {
+    const distance = Vector.distance(circleA.position, circleB.position);
+    const radii = circleA.scaledRadius + circleB.scaledRadius;
+
+    // console.log(distance)
+    if (distance >= radii) {
+      return null;
+    }
+
+    const positionNormal = circleB.position.subtract(circleA.position).normalized;
+    const penetrationDepth = radii - distance;
+
+    return {
+      positionNormal,
+      penetrationDepth,
+    }
+  }
+
+  // public static 
+}
+
+
+export namespace Collider {
+  export enum Behaviour {
+    Dynamic,
+    Trigger,
+    Static,
   }
 }

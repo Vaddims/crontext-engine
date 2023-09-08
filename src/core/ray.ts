@@ -182,132 +182,11 @@ export class Ray {
     return new Ray(position, Vector.right, Infinity);
   }
 
-  // private castScene(scene: Scene): SceneRayResolution | null {
-  //   let closestResolution: SceneRayResolution | null = null;
-  //   let distanceRecord = Infinity;
-
-  //   for (const entity of scene) {
-  //     const collider = entity.components.findOfType(Collider);
-  //     if (!collider) {
-  //       continue;
-  //     }
-
-  //     const vertices = collider.relativeVerticesPosition();
-  //     const { segmentVertexIndexes } = new Shape(vertices);
-  //     for (const [i, j] of segmentVertexIndexes) {
-  //       const vertex = vertices[i];
-  //       const nextVertex = vertices[j];
-
-  //       const detectedAt = this.detect(vertex, nextVertex);
-  //       if (!detectedAt) {
-  //         continue;
-  //       }
-
-  //       const distance = Vector.distance(this.pivot, detectedAt);
-  //       if (distance < distanceRecord) {
-  //         distanceRecord = distance;
-  //         closestResolution = {
-  //           segmentVertexIndexes: [i, j],
-  //           segment: [vertex, nextVertex],
-  //           intersectionPosition: detectedAt,
-  //           collider,
-  //           entity,
-  //         };
-  //       }
-  //     }
-  //   }
-
-  //   return closestResolution;
-  // }
-
-  // private castSegments(segments: Segment[]): RayResolution | null {
-  //   let closestResolution: RayResolution | null = null;
-  //   let distanceRecord = Infinity;
-
-  //   for (const segment of segments) {
-  //     const detectedAt = this.detect(segment[0], segment[1]);
-  //     if (!detectedAt) {
-  //       continue;
-  //     }
-
-  //     const distance = Vector.distance(this.pivot, detectedAt);
-  //     if (distance < distanceRecord) {
-  //       distanceRecord = distance;
-  //       closestResolution = {
-  //         intersectionPosition: detectedAt,
-  //         segment,
-  //       };
-  //     }
-  //   }
-
-  //   return closestResolution;
-  // }
-
-  // research(scene: Scene): SceneRayResolution[];
-  // research(scene: Scene): SceneRayResolution[];
-  // research(segments: Segment[] | readonly Segment[]): RayResolution[];
-  // research(input: Scene | Segment[] | readonly Segment[]) {
-  //   if (input instanceof Scene) {
-  //     return this.researchScene(input);
-  //   }
-
-  //   return this.researchSegments(input);
-  // }
-
-  // private researchScene(scene: Scene) {
-  //   const resolutions: SceneRayResolution[] = [];
-
-  //   for (const entity of scene) {
-  //     const collider = entity.components.findOfType(Collider);
-  //     if (!collider) {
-  //       continue;
-  //     }
-
-  //     const vertices = collider.relativeVerticesPosition();
-  //     const { segmentVertexIndexes } = new Shape(vertices);
-  //     for (const [i, j] of segmentVertexIndexes) {
-  //       const vertex = vertices[i];
-  //       const nextVertex = vertices[j];
-
-  //       const detectedAt = this.detect(vertex, nextVertex);
-  //       if (!detectedAt) {
-  //         continue;
-  //       }
-
-  //       resolutions.push({
-  //         segmentVertexIndexes: [i, j],
-  //         intersectionPosition: detectedAt,
-  //         segment: [vertex, nextVertex],
-  //         collider,
-  //         entity,
-  //       })
-  //     }
-  //   }
-
-  //   return resolutions;
-  // }
-
-  // private researchSegments(segments: Segment[] | readonly Segment[]) {
-  //   const resolutions: RayResolution[] = [];
-  //   for (const segment of segments) {
-  //     const detectedAt = this.detect(segment[0], segment[1]);
-  //     if (!detectedAt) {
-  //       continue;
-  //     }
-
-  //     resolutions.push({
-  //       intersectionPosition: detectedAt,
-  //       segment,
-  //     })
-  //   }
-
-  //   return resolutions;
-  // }
-
   public detect(startVertex: Vector, endVertex: Vector) {
     const intersection = lineWithDiretionIntersection(this.pivot, this.direction, [startVertex, endVertex]);
     return intersection;
   }
+
 
   public static isPointInside(scene: Scene, point: Vector) {
     const ray = new Ray(point, Vector.right)
@@ -324,5 +203,11 @@ export class Ray {
     }
 
     return stack.size > 0;
+  }
+
+  public static isPointInsideShape(shape: Shape, point: Vector) {
+    const ray = new Ray(point, Vector.right)
+    const resolutions = ray.shapeResearch([shape]);
+    return resolutions.length === 1;
   }
 }

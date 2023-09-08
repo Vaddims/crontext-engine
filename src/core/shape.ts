@@ -1,5 +1,5 @@
 import { Transformator } from "objectra";
-import { rotatedOffsetPosition, segmentWithSegmentIntersection } from "../utils/crontext-math";
+import { perpendicularProjection, rotatedOffsetPosition, segmentWithSegmentIntersection } from "../utils/crontext-math";
 import { Transform } from "./transform";
 import { Vector } from "./vector";
 
@@ -21,15 +21,26 @@ export class Shape {
   public readonly vertices: ReadonlyArray<Vector>;
   public readonly segmentVertexIndexes: ReadonlyArray<Shape.SegmentIndexes>;
   public readonly segments: ReadonlyArray<Shape.Segment>;
+  public readonly segmentNormals: ReadonlyArray<Vector>;
 
+  @Transformator.Exclude()
   private cachedBounds: Shape | null = null;
 
-  public constructor(vertices: Vector[]) {
+  private originCenterOffsetFromArithmeticMean = Vector.zero;
+
+  public constructor(vertices: Vector[] | readonly Vector[], centralize = false) {
     if (vertices.length < 3) {
       throw new Error(`Shape must have at least 2 vertices`);
     }
 
-    this.vertices = [...vertices];
+    const arithmeticMeanCenter = Vector.arithemticMean(...vertices);
+    if (centralize) {
+      this.vertices = vertices.map(vector => vector.subtract(arithmeticMeanCenter));
+    } else {
+      this.originCenterOffsetFromArithmeticMean = arithmeticMeanCenter.multiply(Vector.reverse);
+      this.vertices = [...vertices];
+    }
+
 
     if (this.vertices.length > 2) {
       this.segmentVertexIndexes = this.vertices.map((_, i) => {
@@ -41,21 +52,11 @@ export class Shape {
     }
   
     this.segments = this.segmentVertexIndexes.map(([i, j]) => [this.vertices[i], this.vertices[j]]);
-  }
-
-  public withTransform(transform: Transform) {
-    const { position, scale, rotation } = transform;
-    return new Shape(this.vertices.map(
-      vertex => rotatedOffsetPosition(vertex.multiply(scale), rotation).add(position)
-    ));
+    this.segmentNormals = this.segments.map(([p1, p2]) => new Vector(-(p2.y - p1.y), (p2.x - p1.x)));
   }
 
   public [Symbol.iterator](): IterableIterator<Vector> {
     return this.vertices.values();
-  }
-
-  public setRotation() {
-
   }
 
   public static segmentIntersections(a: Shape, b: Shape) {
@@ -77,19 +78,34 @@ export class Shape {
     return intersections;
   }
 
+  public withTransform(transform: Transform) {
+    const { position, scale, rotation } = transform;
+    const shape = this.withOffset(position).withScale(scale).withRotation(rotation);
+    shape.originCenterOffsetFromArithmeticMean = this.originCenterOffsetFromArithmeticMean;
+    return shape;
+  }
+
   public withRotation(rotation: number) {
-    const vertices = this.vertices.map(vertex => rotatedOffsetPosition(vertex, rotation));
-    return new Shape(vertices);
+    const center = this.arithmeticMean().add(this.originCenterOffsetFromArithmeticMean);
+    const vertices = this.vertices.map(vertex => rotatedOffsetPosition(vertex.subtract(center), rotation).add(center));
+    const shape = new Shape(vertices);
+    shape.originCenterOffsetFromArithmeticMean = this.originCenterOffsetFromArithmeticMean;
+    return shape;
   }
 
   public withScale(scale: Vector | number) {
-    const vertices = this.vertices.map(vertex => vertex.multiply(scale));
-    return new Shape(vertices);
+    const center = this.arithmeticMean().add(this.originCenterOffsetFromArithmeticMean);
+    const vertices = this.vertices.map(vertex => vertex.subtract(center).multiply(scale).add(center));
+    const shape = new Shape(vertices);
+    shape.originCenterOffsetFromArithmeticMean = this.originCenterOffsetFromArithmeticMean.multiply(scale);
+    return shape;
   }
 
   public withOffset(vector: Vector) {
     const vertices = this.vertices.map(vertex => vertex.add(vector));
-    return new Shape(vertices);
+    const shape = new Shape(vertices);
+    shape.originCenterOffsetFromArithmeticMean = this.originCenterOffsetFromArithmeticMean;
+    return shape;
   }
 
   public getScale() {
@@ -139,41 +155,80 @@ export class Shape {
   public overlaps(target: Shape) {
     const shapes = [this, target];
 
-    const perpendicularProjection = (shape: Shape, normal: Vector) => {
-      let min = Infinity;
-      let max = -Infinity;
-
-      for (const vertex of shape) {
-        const projected = normal.x * vertex.x + normal.y * vertex.y;
-
-        if (projected < min) {
-          min = projected;
-        }
-
-        if (projected > max) {
-          max = projected;
-        }
-      }
-
-      return [min, max];
-    }
+    let normal = Vector.zero;
+    let depth = Infinity;
 
     for (const shape of shapes) {
-      for (const segment of shape.segments) {
-        const [p1, p2] = segment;
+      for (let i = 0; i < shape.segments.length; i++) {
+        const axis = shape.segmentNormals[i].normalized;
 
-        const normal = new Vector(p2.y - p1.y, p1.x - p2.x);
-
-        const [minA, maxA] = perpendicularProjection(this, normal);
-        const [minB, maxB] = perpendicularProjection(target, normal);
+        const [minA, maxA] = perpendicularProjection(this, axis);
+        const [minB, maxB] = perpendicularProjection(target, axis);
 
         if (maxA < minB || maxB < minA) {
-          return false;
+          return null;
+        }
+
+        const axisDepth = Math.min(maxB - minA, maxA - minB);
+
+        if (axisDepth < depth) {
+          depth = axisDepth;
+          normal = axis;
         }
       }
     }
 
-    return true;
+    const centerA = this.arithmeticMean()
+    const centerB = target.arithmeticMean();
+    const direction = centerB.subtract(centerA);
+
+    if (Vector.dot(direction, normal) < 0) {
+      normal = normal.multiply(Vector.reverse);
+    }
+
+    return {
+      depth,
+      normal,
+    };
+  }
+
+  public boundCenter() {
+    const diagonal = this.bounds.vertices[1].subtract(this.bounds.vertices[3]);
+    const center = diagonal.divide(2).add(this.bounds.vertices[3]);
+    return center;
+  }
+
+  public arithmeticMean() {
+    const center = Vector.zero; // Start with a center vector at origin
+
+    for (const vector of this.vertices) {
+      center.add(vector); // Add each vector to calculate the center
+    }
+
+    center.divide(this.vertices.length); // Divide by the number of vectors to get the center
+
+    // let xOffsetSum = 0;
+    // let yOffsetSum = 0;
+    let offsetSum = Vector.zero;
+
+    for (const vector of this.vertices) {
+      const offset = vector.subtract(center);
+      offsetSum = offsetSum.add(offset);
+
+      // const xOffset = vector.x - center.x;
+      // const yOffset = vector.y - center.y;
+
+      // xOffsetSum += xOffset;
+      // yOffsetSum += yOffset;
+    }
+
+    // const xOffsetMean = xOffsetSum / this.vertices.length;
+    // const yOffsetMean = yOffsetSum / this.vertices.length;
+    // const averageVertex = new Vector(center.x + xOffsetMean, center.y + yOffsetMean);
+
+    const offsetMean = offsetSum.divide(this.vertices.length);
+    const averageVertex = center.add(offsetMean);
+    return averageVertex;
   }
 
   public static vertexCluster(shapes: Shape[]) {

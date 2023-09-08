@@ -3,21 +3,23 @@ import { SimulationInspectorRenderingPipeline } from "../rendering-pipelines/sim
 import { Color } from "../core/color";
 import { Renderer } from "../core/renderer";
 import { Simulation } from "../simulations/simulation";
-import { SimulationInspector } from "../simulations/simulation-inspector";
+import { SimulationInspector, TransformMode } from "../simulations/simulation-inspector";
 import { Vector } from "../core/vector";
 import { Camera } from "../components/camera";
 import { Gizmos } from "../core/gizmos";
-import { Component, Entity, Shape, Transform } from "../core";
-import { Rectangle } from "../shapes";
+import { Component, Entity, Ray, Shape, Space, Transform } from "../core";
+import { Circle, Rectangle } from "../shapes";
 import { BoundingBox } from "../shapes/bounding-box";
+import { rotatedOffsetPosition } from "../utils";
 
 export class SimulationInspectorRenderer extends Renderer {
   public readonly inspector: SimulationInspector;
   public lastKnownMousePosition = Vector.zero;
+  public mouseDown = false;
+  public mouseMovedWhileClicked = false;
 
-  public fps = 0;
-  public potentialFps = 0;
-  public lastPerformanceMesaure = performance.now();
+  public clickedTransformControls = false;
+  public transformFace = Vector.one;
 
   constructor(canvas: HTMLCanvasElement, simulation: Simulation) {
     super(canvas);
@@ -28,17 +30,83 @@ export class SimulationInspectorRenderer extends Renderer {
       canvas.addEventListener('gesturestart', this.gestureStartHandler.bind(this))
       canvas.addEventListener('gesturechange', this.gestureHandler.bind(this))
       canvas.addEventListener('gestureend', this.gestureHandler.bind(this))
+      canvas.addEventListener('wheel', this.safariWheelHandler.bind(this));
+    } else {
       canvas.addEventListener('wheel', this.wheelHandler.bind(this));
+      canvas.addEventListener('mousemove', this.mouseHandler.bind(this));
     }
 
-    // TODO OTHER BROWSER
+    canvas.addEventListener('mousemove', this.mousePositionHandler.bind(this));
+    canvas.addEventListener('mousedown', this.mouseDownHandler.bind(this));
+    canvas.addEventListener('mouseup', this.mouseUpHandler.bind(this));
 
-    canvas.addEventListener('mousemove', this.mouseHandler.bind(this));
-    canvas.addEventListener('click', this.onClick.bind(this));
+    canvas.addEventListener('keydown', this.keypressHandler.bind(this));
+  }
+
+  public keypressHandler(event: KeyboardEvent) {
+    switch (event.key.toUpperCase()) {
+      case 'BACKSPACE':
+        if (event.metaKey) {
+          this.deleteAction();
+        }
+        break;
+    };
+  }
+
+  public deleteAction() {
+    this.inspector.selectedEntities.forEach((entity) => {
+      this.simulation.scene.instantResolve(this.simulation.scene.requestEntityDestruction(entity));
+    });
+
+
+    this.inspector.selectEntities([]);
+  }
+
+  protected mousePositionHandler(event: MouseEvent) {
+    this.lastKnownMousePosition = new Vector(event.offsetX, event.offsetY);
   }
 
   protected mouseHandler(event: MouseEvent) {
-    this.lastKnownMousePosition = new Vector(event.offsetX, event.offsetY);
+    this.mouseMovedWhileClicked = true;
+
+    const currentMousePosition = new Vector(event.offsetX, event.offsetY);
+    const lastMouseScenePosition = this.canvasPointToCoordinates(this.inspector.optic, this.lastKnownMousePosition);
+    const currentMouseScenePosition = this.canvasPointToCoordinates(this.inspector.optic, currentMousePosition);
+
+    if (this.mouseDown) {
+      if (this.inspector.usingControls) {
+        this.inspector.applyDeltaControls(lastMouseScenePosition, currentMouseScenePosition);
+      } else {
+        const offset = this.lastKnownMousePosition.subtract(new Vector(event.offsetX, event.offsetY)).divide(window.devicePixelRatio);
+        this.inspector.handleOpticMovement(offset)
+      }
+    }
+  }
+
+  protected mouseDownHandler(event: MouseEvent) {
+    this.mouseMovedWhileClicked = false;
+    this.mouseDown = true;
+
+    const mouseScenePosition = this.canvasPointToCoordinates(this.inspector.optic, new Vector(event.offsetX, event.offsetY));
+    this.inspector.defineDeltaControls(mouseScenePosition);
+  }
+
+  protected mouseUpHandler(event: MouseEvent) {
+    this.mouseDown = false;
+
+    if (this.clickedTransformControls) {
+
+    } else if (!this.mouseMovedWhileClicked) {
+      const screenCoords = new Vector(event.offsetX, event.offsetY);
+      const coordinates = this.canvasPointToCoordinates(this.inspector.optic, screenCoords);
+      this.inspector.handleSceneClick(coordinates, event.metaKey)
+    }
+
+    this.inspector.usingControls = false;
+
+
+    this.mouseMovedWhileClicked = false;
+    this.clickedTransformControls = false;
   }
 
   protected gestureStartHandler(event: any) {
@@ -49,13 +117,26 @@ export class SimulationInspectorRenderer extends Renderer {
   protected gestureHandler(event: any) {
     event.preventDefault();
     const scale = Math.log10(event.scale);
-    this.inspector.handleOpticScale(scale, this.canvasSize, this.lastKnownMousePosition);
+    const deltaScale = scale - this.inspector.previousScale;
+    this.inspector.handleOpticScale(deltaScale, this.canvasSize, this.lastKnownMousePosition);
     this.inspector.previousScale = scale;
+  }
+
+  protected safariWheelHandler(event: WheelEvent) {
+    event.preventDefault();
+    const offset = new Vector(event.deltaX, event.deltaY).divide(window.devicePixelRatio);
+    this.inspector.handleOpticMovement(offset);
   }
 
   protected wheelHandler(event: WheelEvent) {
     event.preventDefault();
-    this.inspector.handleOpticMovement(event);
+    if (event.deltaY === 0) {
+      return;
+    }
+
+    const direction = event.deltaY / Math.abs(event.deltaY);
+    const deltaScale = -(Math.log10(Math.abs(event.deltaY)) * direction) / 100;
+    this.inspector.handleOpticScale(deltaScale, this.canvasSize, this.lastKnownMousePosition)
   }
 
   protected onClick(event: MouseEvent) {
@@ -143,15 +224,13 @@ export class SimulationInspectorRenderer extends Renderer {
       }
     }
 
-    for (const entity of scene.getEntities()) {
-      for (const component of entity.components) {
-        component[Component.onGizmosRender]?.(gizmos);
-      }
+    for (const component of scene.getComponents()) {
+      component[Component.onGizmosRender]?.(gizmos);
     }
 
-    const { inspectEntities } = this.inspector;
+    const { selectedEntities } = this.inspector;
 
-    for (const entity of inspectEntities) {
+    for (const entity of selectedEntities) {
       const meshRenderer = entity.components.find(MeshRenderer);
 
       if (entity.components.find(Camera)) {
@@ -161,23 +240,15 @@ export class SimulationInspectorRenderer extends Renderer {
       if (meshRenderer) {
         renderingPipeline.highlightMesh(meshRenderer);
       }
-
-      renderingPipeline.renderEntityTransform(entity);
     }
 
+    if (selectedEntities.size > 0) {
+      renderingPipeline.renderEntityTransformControls(this.inspector);
+    }
+    
     context.restore();
 
     requestAnimationFrame(this.render.bind(this));
-
-    const renderEndStamp = performance.now();
-
-    const fpsDelta = (renderEndStamp - this.lastPerformanceMesaure) / 1000;
-    this.fps = 1 / fpsDelta;
-
-    const potentialFpsDelta = (renderEndStamp - renderStartStamp) / 1000;
-    this.potentialFps = 1 / potentialFpsDelta;
-
-    this.lastPerformanceMesaure = renderEndStamp;
   }
 
   public get simulation() {

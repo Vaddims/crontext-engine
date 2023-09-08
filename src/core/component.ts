@@ -1,5 +1,5 @@
 import { Transformator } from "objectra";
-import { FunctionType, functionType } from "objectra/dist/utils";
+import { FunctionType, getFunctionType } from "objectra/dist/utils";
 import { Collider } from "../components";
 import { Collision } from "./collision";
 import { Entity } from "./entity";
@@ -51,7 +51,7 @@ export class Component {
   public static eventMethodIsSequential<T extends Component.ActionMethod<any[], any, any, any[]>>(
     eventMethod: T
   ): eventMethod is Extract<T, ((...args: any) => Generator<any, any, any>)> {
-    return functionType(eventMethod) === FunctionType.Generator;
+    return getFunctionType(eventMethod) === FunctionType.Generator;
   }
 
   static readonly onAwake = Symbol('ComponentOnAwake');
@@ -65,7 +65,7 @@ export class Component {
 
 export type ComponentConstructor<T extends Component = Component> = new (entity: Entity) => T;
 
-type IsolatedEventMethod = Component.ActionMethod<[], void>;
+type IsolatedEventMethod<Arg extends unknown[] = unknown[]> = Component.ActionMethod<Arg, void>;
 type IsolatedEventGenerator = ReturnType<Component.ActionMethods.Sequential<[], void>>;
 export interface Component {
   [Component.onAwake]?(): void;

@@ -1,4 +1,4 @@
-import { Color, Component, Entity, Renderer, Space } from "../core";
+import { Color, Component, Entity, Renderer, Space, Time } from "../core";
 import { Collision } from "../core/collision";
 import { Gizmos } from "../core/gizmos";
 import { Vector } from "../core/vector";
@@ -13,11 +13,15 @@ type RigidbodyResolver<A extends Collider, B extends Collider> =
 type RigidbodyResolvers = [[ColliderConstructor, ColliderConstructor], RigidbodyResolver<any, any>][]; 
 
 export class Rigidbody extends Component {
-  public velocity = Vector.zero;
-  public acceleration = Vector.zero;
-  public elasticity = 1;
-  public friction = 0.01;
+  private linearVelocity = Vector.zero;
+  private rotationalVelocity = 0;
+
+  public spatialFriction = .0;
+
   public mass = 1;
+  public area = 1;
+  public density = 0;
+  public restitution = .5;
 
   public gizmosRenderVelocity = true;
   public gizmosRenderAcceeleration = true;
@@ -25,139 +29,70 @@ export class Rigidbody extends Component {
   private readonly updateResolved: Rigidbody[] = [];
 
   public [Component.onUpdate]() {
-    this.updateResolved.length = 0;
-    this.velocity = this.velocity.add(this.acceleration);
-    this.velocity = this.velocity.multiply(Vector.one.subtract(this.friction))
-    this.transform.translate(this.velocity);
+    // this.updateResolved.length = 0;
+    // this.velocity = this.velocity.add(this.acceleration);
+    this.linearVelocity = this.linearVelocity.multiply(Vector.one.subtract(this.spatialFriction))
+    this.transform.translate(this.linearVelocity.multiply(Time.updateDelta));
   }
 
-  private circleCollisionResolution(collision: Collision<CircleCollider>) {
-    const collider = this.entity.components.get(CircleCollider);
+  public addForce(force: Vector, space = Space.global) {
+    let acceleration = Vector.zero;
 
-    // const normal = collider.position.subtract(collision.collider.position).normalized;
-    // const relativeVelocity = collision.rigidbody ? this.velocity.subtract(collision.rigidbody.velocity) : this.velocity.duplicate();
-    // const seperateVelocity = Vector.dot(relativeVelocity, normal);
-    // const smallestElasticity = collision.rigidbody ? Math.min(this.elasticity, collision.rigidbody.elasticity) : this.elasticity;
-    // const newSeperateVelocity = -seperateVelocity * smallestElasticity;
-    
-    // const invertedMass = 1 / this.mass;
-    // const velocitySeperateDifference = newSeperateVelocity - seperateVelocity;
-    // const targetInvertedMass = collision.rigidbody ? 1 / collision.rigidbody.mass : 0;
-    // const impulse = Math.abs(velocitySeperateDifference / (invertedMass + targetInvertedMass));
-    // const impulseVector = normal.multiply(impulse);
+    switch(space) {
+      case Space.global:
+        acceleration = force.divide(this.mass);
+        break;
 
-    // this.velocity = this.velocity.add(impulseVector.multiply(invertedMass));
-    // if (collision.rigidbody) {
-    //   collision.rigidbody.velocity = collision.rigidbody.velocity.add(impulseVector.multiply(-1 / collision.rigidbody.mass));
-    // }
-  }
-
-  private planeCollisionResponse(collision: Collision<PlaneCollider>) {
-    const collider = this.entity.components.get(CircleCollider);
-
-    const normal = collider.position.subtract(collision.collider.closestPointToPoint(collider.position)).normalized;
-    const seperateVelocity = Vector.dot(this.velocity.duplicate(), normal);
-    const newSeperateVelocity = -seperateVelocity * this.elasticity;
-    const velocitySeperateDifference = seperateVelocity - newSeperateVelocity;
-    this.velocity = this.velocity.add(normal.multiply(-velocitySeperateDifference));
-  }
-
-  onCollision(collision: Collision) {
-   this.resolveCollision(collision);
-  }
-
-  resolveCollision(collision: Collision) {
-    if (this.updateResolved) {
-      return;
+      case Space.local:
+        acceleration = rotatedOffsetPosition(force, this.entity.transform.rotation);
+        break;
     }
 
-    const thisCollider = this.entity.components.get(CircleCollider);
-    const colliders = [thisCollider, collision.collider];
-
-    for (const entry of Rigidbody.resolvers) {
-      const [ keys, resolver ] = entry;
-      
-      type ColliderConstructors = [ColliderConstructor, ColliderConstructor];
-
-      const colliderConstructors = colliders.map(collider => collider.constructor) as ColliderConstructors;
-      if (!keys.includes(colliderConstructors[0]) || !keys.includes(colliderConstructors[1])) {
-        continue;
-      }
-
-      resolver(this, thisCollider, collision.collider);
-    }
+    this.linearVelocity = this.linearVelocity.add(acceleration);
   }
 
-  public addForce(vector: Vector, space = Space.global) {
-    if (space === Space.global) {
-      this.velocity = this.velocity.add(vector);
-      return;
+  public getInvertedMass() {
+    const collider = this.entity.components.findOfType(Collider);
+    if (collider?.behaviour === Collider.Behaviour.Static) {
+      return 0;
     }
 
-    this.velocity = this.velocity.add(rotatedOffsetPosition(vector, this.entity.transform.rotation));
+    return 1 / this.mass;
   }
 
-  public gizmosRender(gizmos: Gizmos) {
-    // if (this.gizmosRenderVelocity) {
-    //   gizmos.renderDirectionalLine(this.transform.position, this.velocity.multiply(10), Color.green);
-    // }
-    
-    // if (this.gizmosRenderAcceeleration) {
-    //   gizmos.renderDirectionalLine(this.transform.position, this.acceleration.normalized.multiply(1.5), Color.red);
-    // }
+  public resolveXCollision(rigidbody: Rigidbody, normal: Vector) {
+    const relativeVelocity = rigidbody.linearVelocity.subtract(this.linearVelocity);
+    const restitution = Math.min(this.restitution, rigidbody.restitution)
+
+    const impulseNorminator = -(1 + restitution) * Vector.dot(relativeVelocity, normal);
+    const impulseDivider = this.getInvertedMass() + rigidbody.getInvertedMass();
+    const impulse = impulseNorminator / impulseDivider;
+
+    this.linearVelocity = this.linearVelocity.subtract(normal.multiply(impulse / this.mass));
+    rigidbody.linearVelocity = rigidbody.linearVelocity.add(normal.multiply(impulse / rigidbody.mass));
   }
 
-  private static readonly resolvers: RigidbodyResolvers = [];
+  public resolveCollision(collision: Collision) {
+    const {
+      normal,
+      colliders,
+    } = collision;
 
-  static setResolver<A extends ColliderConstructor, B extends ColliderConstructor>(
-    collider1: A, collider2: B, detector: RigidbodyResolver<InstanceType<A>, InstanceType<B>>
-  ) {
-    Rigidbody.resolvers.push([[collider1, collider2], detector]);
-  }
+    const externalCollision = colliders[1];
+    const externalRigidbody = externalCollision.entity.components.find(Rigidbody);
 
-  static {
-    Rigidbody.setResolver(CircleCollider, CircleCollider, (rb, rbCollider, collisionCollider) => {
-      const collisionRb = collisionCollider.entity.components.find(Rigidbody);
-    
-      const normal = rbCollider.position.subtract(collisionCollider.position).normalized;
-      const relativeVelocity = collisionRb ? rb.velocity.subtract(collisionRb.velocity) : rb.velocity;
-      const seperateVelocity = Vector.dot(relativeVelocity, normal);
-    
-      const smallestElasticity = collisionRb ? Math.min(rb.elasticity, collisionRb.elasticity) : rb.elasticity;
-      const newSeperateVelocity = -seperateVelocity * smallestElasticity;
-    
-      const invertedMass = 1 / rb.mass;
-      const velocitySeperateDifference = newSeperateVelocity - seperateVelocity;
-      const targetInvertedMass = collisionRb ? 1 / collisionRb.mass : 0;
-      const impulse = Math.abs(velocitySeperateDifference / (invertedMass + targetInvertedMass));
-      const impulseVector = normal.multiply(impulse);
-    
-      rb.velocity = rb.velocity.add(impulseVector.multiply(invertedMass));
-      if (collisionRb) {
-        collisionRb.velocity = collisionRb.velocity.add(impulseVector.multiply(-1 / collisionRb.mass));
-        collisionRb.updateResolved.push(rb);
-      }
-    });
+
+    const relativeVelocity = (externalRigidbody?.linearVelocity ?? Vector.zero).subtract(this.linearVelocity);
+    const restitution = Math.min(this.restitution, (externalRigidbody?.restitution ?? this.restitution));
+
+    const impulseNorminator = -(1 + restitution) * Vector.dot(relativeVelocity, normal);
+    const impulseDivider = this.getInvertedMass() + (externalRigidbody?.getInvertedMass() ?? 0);
+    const impulse = impulseNorminator / impulseDivider;
+
+    if (externalRigidbody) {
+      externalRigidbody.linearVelocity = externalRigidbody.linearVelocity.add(normal.multiply(impulse / externalRigidbody.mass));
+    }
+
+    this.linearVelocity = this.linearVelocity.subtract(normal.multiply(impulse / this.mass));
   }
 }
-
-// private circleCollisionResolution(collision: Collision<CircleCollider>) {
-//   const collider = this.entity.components.get(CircleCollider);
-
-//   const normal = collider.position.subtract(collision.collider.position).normalized;
-//   const relativeVelocity = collision.rigidbody ? this.velocity.subtract(collision.rigidbody.velocity) : this.velocity.duplicate();
-//   const seperateVelocity = Vector.dot(relativeVelocity, normal);
-//   const smallestElasticity = collision.rigidbody ? Math.min(this.elasticity, collision.rigidbody.elasticity) : this.elasticity;
-//   const newSeperateVelocity = -seperateVelocity * smallestElasticity;
-  
-//   const invertedMass = 1 / this.mass;
-//   const velocitySeperateDifference = newSeperateVelocity - seperateVelocity;
-//   const targetInvertedMass = collision.rigidbody ? 1 / collision.rigidbody.mass : 0;
-//   const impulse = Math.abs(velocitySeperateDifference / (invertedMass + targetInvertedMass));
-//   const impulseVector = normal.multiply(impulse);
-
-//   this.velocity = this.velocity.add(impulseVector.multiply(invertedMass));
-//   if (collision.rigidbody) {
-//     collision.rigidbody.velocity = collision.rigidbody.velocity.add(impulseVector.multiply(-1 / collision.rigidbody.mass));
-//   }
-// }

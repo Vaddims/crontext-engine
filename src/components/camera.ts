@@ -100,7 +100,6 @@ export class Camera extends Component {
     this.boundingBoxViewportTraceEntities = boundingBoxViewportTraceEntities;
     this.viewportEntities = viewportEntities;
 
-    // console.log(this.viewportEntities.size)
     for (const entity of this.viewportEntities) {
       if (this.layerMask.some(layerMask => entity.layers.has(layerMask))) {
         continue;

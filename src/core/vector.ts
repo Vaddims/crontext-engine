@@ -54,9 +54,23 @@ export class Vector {
     return this[1];
   }
 
+  public get lenghtSquared() {
+    return this.x ** 2 + this.y ** 2;
+  }
+
   public rotation() {
     const angle = Math.atan2(this.y, this.x);
-    return (angle >= 0 ? angle : angle + Math.PI * 2) - Math.PI / 2;
+
+    // Ensure the angle is positive by adding 2π if it's negative
+    if (angle < 0) {
+      return angle + 2 * Math.PI;
+    }
+
+    return angle;
+
+
+    // const angle = Math.atan2(this.y, this.x);
+    // return (angle >= 0 ? angle : angle + Math.PI * 2) - Math.PI / 2;
   }
 
   public isEqual(vector: Vector) {
@@ -86,6 +100,21 @@ export class Vector {
 	public divide(...operationInputs: VectorOperationInput[]) {
     return this.performOperation(operationInputs, (a, b) => a / b);
 	}
+
+  public swap() {
+    return new Vector(this.y, this.x);
+  }
+
+  public static projection(direction: Vector, secondary: Vector): Vector {
+    const dotProduct = Vector.dot(direction, secondary);
+    const magnitudeSquared = direction.lenghtSquared;
+
+    const scaleFactor = dotProduct / magnitudeSquared;
+
+    const projectedVector = direction.multiply(scaleFactor);
+
+    return projectedVector;
+  }
 
   public duplicate() {
     return new Vector(this.x, this.y);
@@ -129,6 +158,12 @@ export class Vector {
     return from.subtract(to).magnitude;
   }
 
+  public static distanceSquared(a: Vector, b: Vector) {
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    return dx * dx + dy * dy;
+  }
+
   public static fromAngle(radians: number) {
     return new Vector(Math.cos(radians), Math.sin(radians));
   }
@@ -152,6 +187,14 @@ export class Vector {
 		return max;
 	}
 
+  public static arithemticMean(...vectors: Vector[]) {
+    const center = vectors.reduce(((center, vector) => center.add(vector)), Vector.one).divide(vectors.length);
+    const offsetSum = vectors.reduce((offsetSum, vector) => offsetSum.add(vector.subtract(center)), Vector.zero);
+    const offsetMean = offsetSum.divide(vectors.length);
+    const averageVector = offsetMean.add(center);
+    return averageVector;
+  }
+
   public static lerp(a: Vector, b: Vector, t: number) {
     return a.multiply(t).add(b.multiply(1 - t));
   }
@@ -160,7 +203,7 @@ export class Vector {
     return new Vector(Math.round(vector.x), Math.round(vector.y));
   }
 
-  public static get random() {
+  public static random() {
     return new Vector(Math.random() * 2 - 1, Math.random() * 2 - 1);
   }
 

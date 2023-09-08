@@ -6,6 +6,7 @@ import { type MeshRenderer, type Camera } from "../components";
 import { Shape } from "./shape";
 import { SpatialPartitionCluster } from "./spatial-partition/spatial-partition-cluster";
 import { SpatialPartition } from "./spatial-partition/spatial-partition";
+import { Constructor } from "objectra/dist/types/util.types";
 
 @Transformator.Register<Scene>()
 export class Scene implements Iterable<Entity> {
@@ -17,9 +18,11 @@ export class Scene implements Iterable<Entity> {
   private readonly componentInstances = new Set<Component>();
   
   private readonly actionRequests: Scene.ActionRequest[] = [];
+  
   private readonly actionRequestResult = new WeakMap<Scene.ActionRequest, unknown>();
 
-  public readonly spatialPartition = new SpatialPartition<Entity>(3);
+  @Transformator.Exclude()
+  public spatialPartition = new SpatialPartition<Entity>(3);
 
   public recacheEntitySpatialPartition(entity: Entity) {
     const getBelongingClusters = (bounds: Shape, level: number) => {
@@ -75,7 +78,8 @@ export class Scene implements Iterable<Entity> {
     }
 
     // add new clusters
-    const newBoundClusters = getBelongingClusters(bounds, clusterLevel);
+    const newBoundClusters = getBelongingClusters(bounds, clusterLevel) //.map(cluster => Objectra.duplicate(cluster));
+
     for (const boundCluster of newBoundClusters) {
       this.spatialPartition.injectBranch(boundCluster, [entity]);
     }
@@ -87,11 +91,10 @@ export class Scene implements Iterable<Entity> {
 
   public recacheSpatialPartition() {
     const entities = this.getEntities();
+    this.spatialPartition['headBranch'] = null;
     for (const entity of entities) {
       this.recacheEntitySpatialPartition(entity);
     }
-
-    // console.log(this.spatialPartition['headBranch'])
   }
 
   public [Symbol.iterator]() {
@@ -274,12 +277,21 @@ export class Scene implements Iterable<Entity> {
         this.hoistedEntities.delete(entity);
       }
     } else {
-      entity.parent?.['children'].delete(entity);
       this.hoistedEntities.add(entity);
     }
 
+    entity.parent?.['children'].delete(entity);
+
+    const pureEntityTransform = entity.transform.toPureTransform();
+
+    const previousParent = entity['parentEntity'];
     entity['parentEntity'] = newParent;
-    entity.transform['updateRelativeLocalTransform']();
+    if (newParent && !previousParent) {
+      entity.transform.calibrateLocals();
+    } else {
+      entity.transform.calibrateGlobals(pureEntityTransform);
+    }
+
     return entity;
   }
 
@@ -293,6 +305,10 @@ export class Scene implements Iterable<Entity> {
 
     if (!entity.parent) {
       this.hoistedEntities.delete(entity);
+    }
+
+    for (const component of entity.components) {
+      this.componentInstances.delete(component);
     }
 
     entity.parent?.['children'].delete(entity);
@@ -397,6 +413,10 @@ export class Scene implements Iterable<Entity> {
     for (const [actionRequest, result] of actionRequestResultMap) {
       this.actionRequestResult.set(actionRequest, result);
     }
+
+    // if (updateQuantity > 0) {
+    //   this.recacheSpatialPartition();
+    // }
 
     function resolveGeneratorIteration(generator: AnyGenerator) {
       const generatorActionRequestHistory = generatorActionRequestHistoryMap.get(generator) ?? [];
@@ -599,6 +619,7 @@ export class Scene implements Iterable<Entity> {
 
   public update() {
     this.resolveActionRequests();
+    this.recacheSpatialPartition();
   }
 }
 

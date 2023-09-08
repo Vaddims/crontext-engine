@@ -12,8 +12,38 @@ import { Space } from "../core/space";
 import { Color } from "../core/color";
 import { rotatedOffsetPosition } from "../utils/crontext-math";
 import { Triangle } from "../shapes/triangle";
+import { Circle, IcocelesTriangle } from "../shapes";
+import { Simulation, SimulationInspector, TransformMode } from "../simulations";
+
+interface TransformControlColorPalette {
+  readonly main: Color;
+  readonly outline: Color;
+}
 
 export class SimulationInspectorRenderingPipeline extends SimulationRenderingPipeline<SimulationInspectorRenderer> {
+  public readonly transformControl = {
+    lineWidthScalar: .3,
+    showUsableAreas: false,
+    colorPalette: {
+      omnidirectional: {
+        main: new Color(75, 75, 255),
+        outline: new Color(0, 0, 200),
+      },
+      horizontal: {
+        main: Color.red,
+        outline: new Color(200, 0, 0),
+      },
+      vertical: {
+        main: Color.green,
+        outline: new Color(0, 200, 0),
+      },
+      usableControlArea: {
+        main: Color.transparent,
+        outline: Color.yellow,
+      }
+    }
+  }
+
   renderMeshMarkup(canvasSize: Vector) {
     const { context } = this;
     const divider = 10 ** (Math.ceil(Math.log10(this.optic.scale.x) - .5));
@@ -45,9 +75,10 @@ export class SimulationInspectorRenderingPipeline extends SimulationRenderingPip
     const { context } = this;
 
     context.beginPath();
-    const { vertices } = shape;
+    const { vertices } = shape.withScale(this.optic.pixelsPerUnit);
     for (let i = 0; i < vertices.length; i++) {
-      const vertex = vertices[i].multiply(this.optic.pixelsPerUnit);
+      // const vertex = vertices[i].multiply(this.optic.pixelsPerUnit);
+      const vertex = vertices[i];
       if (i === 0) {
         context.moveTo(vertex.x, -vertex.y);
         continue;
@@ -57,39 +88,158 @@ export class SimulationInspectorRenderingPipeline extends SimulationRenderingPip
     context.closePath();
   }
 
-  public renderEntityTransform(entity: Entity, space = Space.local) {
-    const renderTransformAxis = (rotation: number, color: Color) => {
-      const { context } = this;
-      const renderingPosition = this.getRenderingPosition(entity.transform.position)
-      const point = renderingPosition.add(rotatedOffsetPosition(Vector.up.multiply(1.5), rotation).multiply(this.optic.pixelsPerUnit, Vector.reverseY));
+  public createDirectionalShape(inspector: SimulationInspector, axisDirection: Vector, horizontalAlignedHeadScale: Vector) {
+    const headRightDirectionSize = inspector.directionalAxisControlHorizontalSize.y * horizontalAlignedHeadScale.x;
+    const transformControlsRightUnitSize = new Vector(inspector.directionalAxisControlHorizontalSize.x - headRightDirectionSize, inspector.directionalAxisControlHorizontalSize.y * this.transformControl.lineWidthScalar);
+    const controlRotation = inspector.getControlRotation();
+    const position = inspector.getInspectingEntitiesArithmeticPositionMean();
 
-      context.save();
+    const axisDirectionalScale = axisDirection.multiply(transformControlsRightUnitSize.x);
+    return new Rectangle()
+      .withScale(this.optic.scale)
+      .withScale(transformControlsRightUnitSize)
+      .withRotation(controlRotation + axisDirection.rotation())
+      .withOffset(
+        position.add(
+          rotatedOffsetPosition(axisDirectionalScale.multiply(this.optic.scale), controlRotation).divide(2)
+        )
+      )
+  }
 
-      context.save();
-      context.beginPath();
-      context.moveTo(...renderingPosition.raw);
-      context.lineTo(...point.raw);
-      context.closePath();
-      context.restore();
+  public createDirectionalHeadShape(inspector: SimulationInspector, shape: Shape, axisDirection: Vector, horizontalAlignedHeadScale: Vector) {
+    const position = inspector.getInspectingEntitiesArithmeticPositionMean();
+    const controlRotation = inspector.getControlRotation();
+    const headRightDirectionSize = inspector.directionalAxisControlHorizontalSize.y * horizontalAlignedHeadScale.x;
 
-      context.lineWidth = 2;
-      context.strokeStyle = context.fillStyle = color.toString();
-      context.stroke();
+    const triangleAxisDirectionalScale = axisDirection.multiply(inspector.directionalAxisControlHorizontalSize.x - (headRightDirectionSize / 2));
+    return shape
+      .withScale(this.optic.scale)
+      .withScale(horizontalAlignedHeadScale.multiply(inspector.directionalAxisControlHorizontalSize.y).swap()) //headRightScale.multiply(inspector.directionalAxisControlRightSize.y))
+      .withRotation(controlRotation + axisDirection.rotation() - Math.PI / 2)
+      .withOffset(        
+        position.add(
+          rotatedOffsetPosition(triangleAxisDirectionalScale.multiply(this.optic.scale), controlRotation)
+        )
+      )
+  }
 
-      context.translate(point.x, point.y);
-      this.defineFixedShapePath(new Triangle().withTransform(Transform.setRotation(rotation).setScale(new Vector(0.25, 0.5))));
-      context.fill();
-      context.restore();
+  public renderEntityTransformPositionControl(inspector: SimulationInspector) {
+    const { colorPalette } = this.transformControl;
+    const horizontalAlignedHeadScale = new Vector(1.5, 1);
+
+    const position = inspector.getInspectingEntitiesArithmeticPositionMean();
+    const controlRotation = inspector.getControlRotation()
+
+    const renderTransformAxis = (axisDirection: Vector, controlColorPalette: TransformControlColorPalette) => {
+      const directionalShape = this.createDirectionalShape(inspector, axisDirection, horizontalAlignedHeadScale);
+      const headShape = this.createDirectionalHeadShape(inspector, new IcocelesTriangle(), axisDirection, horizontalAlignedHeadScale);
+
+      this.renderShape(directionalShape, Vector.zero, 0, controlColorPalette.main);
+      this.renderShape(headShape, Vector.zero, 0, controlColorPalette.main);
+
+      this.outlineShape(directionalShape, controlColorPalette.outline);
+      this.outlineShape(headShape, controlColorPalette.outline)
     }
 
-    if (space === Space.global) {
-      renderTransformAxis(0, Color.green);
-      renderTransformAxis(-Math.PI / 2, Color.red);
-      return;
+    renderTransformAxis(Vector.right, colorPalette.horizontal);
+    renderTransformAxis(Vector.up, colorPalette.vertical);
+
+    this.renderFixedDisk(position, .3, colorPalette.omnidirectional.main);
+    this.renderFixedCircle(position, .3, colorPalette.omnidirectional.outline)
+
+    if (this.transformControl.showUsableAreas) {
+      const createControlArea = inspector.transformAxisControlAreaFactory(position, controlRotation);
+      this.outlineShape(createControlArea(Vector.up), colorPalette.usableControlArea.outline);
+      this.outlineShape(createControlArea(Vector.right), colorPalette.usableControlArea.outline);
+    }
+  }
+
+  public renderEntityTransformRotationControls(inspector: SimulationInspector) {
+    const { colorPalette } = this.transformControl;
+    const position = inspector.getInspectingEntitiesArithmeticPositionMean();
+    const controlRotation = inspector.getControlRotation();
+    const circleRadius = 1.5;
+    const lineWidth = 5;
+    const controlAxisIndicatorScalar = .4;
+
+    this.renderFixedCircle(position, circleRadius, new Color(75, 75, 255), lineWidth);
+    const renderDirectionalLine = (direction: Vector, color: Color) => {
+      const pivot = position.add(
+        rotatedOffsetPosition(direction.multiply(circleRadius - controlAxisIndicatorScalar / 2).multiply(this.optic.scale), controlRotation)
+      );
+
+      const lineDirection = rotatedOffsetPosition(direction.multiply(controlAxisIndicatorScalar), controlRotation);
+      this.renderFixedDirectionalLine(pivot, lineDirection, color, lineWidth)
     }
 
-    renderTransformAxis(entity.transform.rotation, Color.green);
-    renderTransformAxis(entity.transform.rotation - Math.PI / 2, Color.red);
+    renderDirectionalLine(Vector.right, colorPalette.horizontal.main)
+    renderDirectionalLine(Vector.up, colorPalette.vertical.main);
+    
+    if (this.transformControl.showUsableAreas) {
+      const createControlArea = inspector.transformAxisControlRotationalAreaFactory(position);
+      this.outlineShape(createControlArea(inspector.rotationalAxisControlBaseRadius - inspector.rotationalAxisControlPaddingArea), colorPalette.usableControlArea.outline);
+      this.outlineShape(createControlArea(inspector.rotationalAxisControlBaseRadius + inspector.rotationalAxisControlPaddingArea), colorPalette.usableControlArea.outline);
+    }
+  }
+
+  public renderEntityTransformScaleControls(inspector: SimulationInspector) {
+    const { colorPalette } = this.transformControl;
+    const horizontalAlignedHeadScale = new Vector(1, 1);
+
+    const position = inspector.getInspectingEntitiesArithmeticPositionMean();
+    const controlRotation = inspector.getControlRotation()
+
+    const renderTransformAxis = (axisDirection: Vector, controlColorPalette: TransformControlColorPalette) => {
+      const directionalShape = this.createDirectionalShape(inspector, axisDirection, horizontalAlignedHeadScale);
+      const headShape = this.createDirectionalHeadShape(inspector, new Rectangle(), axisDirection, horizontalAlignedHeadScale);
+
+      this.renderShape(directionalShape, Vector.zero, 0, controlColorPalette.main);
+      this.renderShape(headShape, Vector.zero, 0, controlColorPalette.main);
+
+      this.outlineShape(directionalShape, controlColorPalette.outline);
+      this.outlineShape(headShape, controlColorPalette.outline)
+    }
+
+    renderTransformAxis(Vector.right, colorPalette.horizontal);
+    renderTransformAxis(Vector.up, colorPalette.vertical);
+
+    this.renderFixedDisk(position, .3, colorPalette.omnidirectional.main);
+    this.renderFixedCircle(position, .3, colorPalette.omnidirectional.outline)
+
+
+    if (this.transformControl.showUsableAreas) {
+      const createControlArea = inspector.transformAxisControlAreaFactory(position, controlRotation);
+      this.outlineShape(createControlArea(Vector.up), colorPalette.usableControlArea.outline);
+      this.outlineShape(createControlArea(Vector.right), colorPalette.usableControlArea.outline);
+    }
+  }
+
+  public renderEntityTransformControls(simulationInspector: SimulationInspector) {
+    switch (simulationInspector.transformMode) {
+      case TransformMode.Position:
+        this.renderEntityTransformPositionControl(simulationInspector);
+        break;
+
+      case TransformMode.Rotation:
+        this.renderEntityTransformRotationControls(simulationInspector);
+        break;
+
+      case TransformMode.Scale:
+        this.renderEntityTransformScaleControls(simulationInspector);
+        break;
+    }
+  }
+
+  public renderFixedShape(shape: Shape, color: Color) {
+    const { context } = this;
+    const renderingPosition = this.getRenderingPosition(shape.arithmeticMean());
+    
+    context.save();
+    context.translate(...renderingPosition.raw);
+    this.defineFixedShapePath(shape);
+    context.fillStyle = color.toString()
+    context.fill();
+    context.restore();
   }
 
   public renderEntityMeshBoundaryRectangle(meshRenderer: MeshRenderer) {
@@ -122,14 +272,14 @@ export class SimulationInspectorRenderingPipeline extends SimulationRenderingPip
     context.restore();
   }
 
-  public renderFixedCircle(center: Vector, radius: number, color: Color) {
+  public renderFixedCircle(center: Vector, radius: number, color: Color, width = 2) {
     const { context } = this;
     
     context.save();
     const renderingPosition = this.getRenderingPosition(center)
     context.translate(...renderingPosition.raw);
     this.defineFixedCirclePath(radius);
-    context.lineWidth = 2;
+    context.lineWidth = width;
     context.strokeStyle = color.toString();
     context.stroke();
     context.restore();
@@ -141,6 +291,11 @@ export class SimulationInspectorRenderingPipeline extends SimulationRenderingPip
     context.beginPath();
     context.arc(0, 0, radius * this.optic.pixelsPerUnit, 0, Math.PI * 2);
     context.closePath();
+  }
+
+  public renderFixedDirectionalLine(pivot: Vector, direction: Vector, color: Color, width = 2) {
+    const scaledDirection = direction.multiply(this.optic.scale);
+    this.renderDirectionalLine(pivot, scaledDirection, color, width);
   }
 
   public renderFixedDisk(fulcrum: Vector, radius: number, color: Color) {

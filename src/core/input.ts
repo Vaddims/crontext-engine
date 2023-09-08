@@ -2,6 +2,7 @@ import { Engine } from "./engine";
 import type { Simulation } from "../simulations";
 import type { Camera } from "../components";
 import { Vector } from "./vector";
+import { Component } from "./component";
 
 export class Input {
   private static initiated = false;
@@ -77,31 +78,39 @@ export class Input {
 
   private static addMouseEventListeners() {
     const handleMouseClick = (symbol: symbol, event: MouseEvent) => {
-      Engine.getRunningSimulations().forEach((simulation) => {
-        if (event.target !== simulation.renderer.canvas) {
-          return;
-        }
+      if (!event.target) {
+        return;
+      }
 
-        const { scene, renderer } = simulation;
-        const cameras = scene.getCameras();
-        
-        const responseMap = new Map<Camera, Input.Mouse.ActionEvent>();
-        for (const camera of cameras) {
-          const optic = camera.toOptic();
-          const screenPoint = new Vector(event.clientX, event.clientY);
-          const clientScenePosition = renderer.canvasPointToCoordinates(optic, screenPoint);
+      const renderer = Engine.getCanvasRenderer(event.target as HTMLCanvasElement);
+      if (!renderer) {
+        return;
+      }
 
-          const actionEventResponse: Input.Mouse.ActionEvent = {
-            clientScenePosition,
-          };
+      event.preventDefault();
 
-          responseMap.set(camera, actionEventResponse);
-        }
+      const simulation = renderer.simulation;
 
-        simulation.scene.requestComponentActionEmission(symbol, {
-          args: [event, responseMap],
-        });
-      })
+      const { scene } = simulation;
+      const cameras = scene.getCameras();
+      
+      const responseMap = new Map<Camera, Input.Mouse.ActionEvent>();
+      for (const camera of cameras) {
+        const optic = camera.toOptic();
+        const screenPoint = new Vector(event.clientX, event.clientY);
+        const clientScenePosition = renderer.canvasPointToCoordinates(optic, screenPoint);
+
+        const actionEventResponse: Input.Mouse.ActionEvent = {
+          clientScenePosition,
+        };
+
+        responseMap.set(camera, actionEventResponse);
+      }
+
+      simulation.scene.requestComponentActionEmission(symbol, {
+        args: [event, responseMap],
+      });
+      
     }
 
     const handleMouseEvent = (symbol: symbol, event: MouseEvent) => {
@@ -118,6 +127,7 @@ export class Input {
 
     document.addEventListener('click', event => handleMouseClick(Input.onMouseClick, event));
     document.addEventListener('dblclick', event => handleMouseClick(Input.onMouseDoubleClick, event));
+    document.addEventListener('contextmenu', event => handleMouseClick(Input.onMouseSecondaryClick, event))
     document.addEventListener('mousemove', event => handleMouseEvent(Input.onMouseMove, event));
   }
 
@@ -145,11 +155,19 @@ export class Input {
   public static readonly onKeyUp = Symbol('InputKeyDown');
   public static readonly onKeyPress = Symbol('InputKeyDown');
   public static readonly onMouseClick = Symbol('InputMouseClick');
+  public static readonly onMouseSecondaryClick = Symbol('InputMouseSecondaryClick');
   public static readonly onMouseDoubleClick = Symbol('InputMouseDoubleClick');
   public static readonly onMouseMove = Symbol('InputMouseMove');
 }
 
 export namespace Input {
+  export type MouseEventResolution = Map<Camera, Input.Mouse.ActionEvent>;
+  export interface ComponentActions {
+    [Input.onMouseClick]?(event: MouseEvent): void;
+    [Input.onMouseClick]?(event: MouseEvent): ReturnType<Component.ActionMethods.Sequential<[MouseEvent, MouseEventResolution], void>>
+    [Input.onMouseClick]?: Component.ActionMethod<[MouseEvent, MouseEventResolution], void>;
+  }
+
   export class KeyAction {
     public readonly down: symbol;
     public readonly up: symbol;

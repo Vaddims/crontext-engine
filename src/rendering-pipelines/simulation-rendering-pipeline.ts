@@ -91,6 +91,10 @@ export class SimulationRenderingPipeline<T extends SimulationRenderer = Simulati
     context.restore();
   }
 
+  public renderDirectionalLine(pivot: Vector, direction: Vector, color: Color, width = 2) {
+    this.renderLine(pivot, pivot.add(direction), color, width);
+  }
+
   public defineCirclePath(radius: number) {
     const { context } = this;
 
@@ -124,7 +128,7 @@ export class SimulationRenderingPipeline<T extends SimulationRenderer = Simulati
     context.restore();
   }
 
-  public createMask(vertices: Vector[]) {
+  public createMask(vertices: readonly Vector[] | Vector[]) {
     const { context } = this;
 
     context.save();
@@ -173,6 +177,22 @@ export class SimulationRenderingPipeline<T extends SimulationRenderer = Simulati
       const nextVertex = i === shape.vertices.length - 1 ? shape.vertices[0] : shape.vertices[i + 1];
       this.renderLine(vertex, nextVertex, color);
     }
+  }
+
+  public outlineFixedShape(shape: Shape, color = Color.black) {
+    const { context } = this;
+
+    context.save()
+    this.defineShapePath(shape.withScale(this.optic.scale));
+    context.strokeStyle = color.toString();
+    context.stroke();
+    context.restore();
+
+    // for (let i = 0; i < shape.vertices.length; i++) {
+    //   const vertex = shape.vertices[i];
+    //   const nextVertex = i === shape.vertices.length - 1 ? shape.vertices[0] : shape.vertices[i + 1];
+    //   this.renderLine(vertex, nextVertex, color);
+    // }
   }
 }
 
