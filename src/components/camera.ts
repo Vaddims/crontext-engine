@@ -3,7 +3,7 @@ import { Color } from "../core/color";
 import { Optic } from "../core/optic";
 import { SimulationRenderer } from "../renderers/simulation-renderer";
 import { Vector } from "../core/vector";
-import { SimulationRenderingPipeline, SimulationRenderingPipelineConstuctor } from "../rendering-pipelines/simulation-rendering-pipeline";
+import { SimulationRenderingPipeline } from "../rendering-pipelines/simulation-rendering-pipeline";
 import { MeshRenderer } from "./mesh-renderer";
 import { LightSource } from "./light";
 import { Layer } from "../core/layer";
@@ -12,25 +12,28 @@ import { Rectangle } from "../shapes";
 import { SpatialPartitionCluster } from "../core/spatial-partition/spatial-partition-cluster";
 import { BoundingBox } from "../shapes/bounding-box";
 import { getBaseLog } from "../utils";
+import { Transformator } from "objectra";
 
 // TODO NOT TO RENDER UNEEDED ENTITIES LIKE IN GIZMOS EXAMPLE
+@Transformator.Register()
 export class Camera extends Component {
-  public SimulationRenderingPipeline: SimulationRenderingPipelineConstuctor = SimulationRenderingPipeline;
-
   public readonly layerMask: Layer[] = [Layer.camera];
   public canvasRelativePosition = Vector.zero;
   public canvasRelativeSize = Vector.one;
 
   public background = Color.white;
 
+  @Transformator.Exclude()
   protected viewportEntities = new Set<Entity>();
+
+  @Transformator.Exclude()
   protected boundingBoxViewportTraceEntities = new Set<Entity>();
 
   render(renderer: SimulationRenderer) {
     const { context, canvasSize } = renderer;
     const optic = this.toOptic();
     optic.pixelsPerUnit = renderer.pixelsPerUnit;
-    const renderingPipelineInstance = new this.SimulationRenderingPipeline(renderer, optic);
+    const renderingPipelineInstance = new SimulationRenderingPipeline(renderer, optic);
 
     const cameraPixelPosition = this.canvasRelativePosition.multiply(canvasSize);
     const cameraPixelSize = this.canvasRelativeSize.multiply(canvasSize);

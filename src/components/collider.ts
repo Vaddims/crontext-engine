@@ -1,3 +1,4 @@
+import { Transformator } from "objectra";
 import { Color, Component, Shape, Transform, Vector } from "../core";
 import { Collision } from "../core/collision";
 import { Gizmos } from "../core/gizmos";
@@ -10,6 +11,7 @@ export interface Collider {
   get position(): Vector;
 }
 
+@Transformator.Register()
 export class Collider extends Component implements Collider {
   public shape: Shape = new Rectangle();
   public behaviour = Collider.Behaviour.Dynamic;

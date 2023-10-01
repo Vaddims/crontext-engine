@@ -1,8 +1,16 @@
+import { Transformator } from "objectra";
 import { Shape } from "../shape";
 import { Vector } from "../vector";
 import { CheckpointRaycast, VisibilityPolygon, VisibilityPolygonCreationOptions } from "../visibility-polygon";
 
 export interface VisibilityPolygonPanoramaCreationOptions extends VisibilityPolygonCreationOptions {}
+
+// export interface VisibilityPolygonCreationOptions {
+//   readonly fulcrum: Vector;
+//   readonly obsticles: Shape[];
+//   readonly skipObsticleCulling?: boolean;
+//   readonly externalMasks: Shape[] & { readonly 0: Shape };
+// }
 
 export class PanoramaVisibilityPolygon extends VisibilityPolygon {
   constructor(options: VisibilityPolygonPanoramaCreationOptions) {

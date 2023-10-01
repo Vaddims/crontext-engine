@@ -8,7 +8,7 @@ import { Vector } from "./vector";
 @Transformator.Register()
 export class EntityTransform {
   @Transformator.ArgumentPassthrough()
-  private readonly entity: Entity;
+  public readonly entity: Entity;
   
   constructor(entity: Entity) {
     this.entity = entity;

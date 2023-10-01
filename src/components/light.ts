@@ -1,3 +1,4 @@
+import { Transformator } from "objectra";
 import { Component, ComponentConstructor, Ray, Renderer, Shape, Vector } from "../core";
 import { VisibilityPolygon } from "../core/visibility-polygon";
 import { SimulationRenderingPipeline } from "../rendering-pipelines";
@@ -50,9 +51,12 @@ class LightSourceSegmentShareMap extends Map {
   }
 }
 
+@Transformator.Register()
 export class LightSource extends Component {
   public usePhysicalRendering = true; // Rendering with shadow casts
   public physicalRenderingDependence: ComponentConstructor<MeshRenderer> | ComponentConstructor<Collider> = MeshRenderer;
+
+  @Transformator.Exclude()
   public visibilityPolygonCache: VisibilityPolygon | null = null;
 
   public static createStableRaycastCheckpoint(exposed: Vector): StableCheckpointRaycast {

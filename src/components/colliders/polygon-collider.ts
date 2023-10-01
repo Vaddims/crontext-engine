@@ -1,3 +1,4 @@
+import { Transformator } from "objectra";
 import { Color, Component, Shape, Transform, Vector } from "../../core";
 import { Collision } from "../../core/collision";
 import { Gizmos } from "../../core/gizmos";
@@ -6,6 +7,7 @@ import { lerp, pointSegmentDistance } from "../../utils";
 import { Collider } from "../collider";
 import { Rigidbody } from "../rigidbody";
 
+@Transformator.Register()
 export class PolygonCollider extends Collider {
   public readonly shape = new Rectangle();
 

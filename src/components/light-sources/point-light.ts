@@ -1,74 +1,133 @@
-import { Color, Entity, Optic, Ray, Renderer, RenderingPipeline, Scene, Shape, Transform, Vector } from "../../core";
+import { Transformator } from "objectra";
+import { Color, Component, Entity, Ray, Scene, Shape, Transform, Vector } from "../../core";
 import { Gizmos } from "../../core/gizmos";
 import { VisibilityPolygon } from "../../core/visibility-polygon";
 import { PanoramaVisibilityPolygon } from "../../core/visibility-polygons/panorama-visibility-polygon";
-import { SimulationRenderer } from "../../renderers";
 import { SimulationRenderingPipeline } from "../../rendering-pipelines";
 import { Rectangle } from "../../shapes";
-import { lineWithLineIntersection, rotatedOffsetPosition, segmentWithSegmentIntersection } from "../../utils";
-import { Camera } from "../camera";
 import { LightSource } from "../light";
+import { rotatedOffsetPosition } from "../../utils";
 
-interface RaycastCheckpoint {
-  exposed: Vector,
-  endpoint?: Vector,
-  endpointSegment?: Shape.Segment,
-}
-
-const boundsOverlaping = (a: Shape, b: Shape) => {
-  const av = a.vertices;
-  const bv = b.vertices;
-
-  return av[1].x > bv[0].x && av[0].x < bv[1].x && av[0].y > bv[3].y && av[3].y < bv[0].y;
-}
-
+@Transformator.Register()
 export class PointLight extends LightSource {
+  public renderLight = true;
+  public renderReflections = true;
+  public renderBloomOverflows = true;
+
   public recache = true;
   public range = 20;
   public color = Color.white;
   public ignoreOverlapEntity = false;
+  public internalMeshBloom = .2;
+  public internalBloomBlur = 3;
+  public reflectionBloomBlur = 10;
   
   private readonly raycastInaccuracy = 0.00001;
+
+  @Transformator.Exclude()
+  public visibilityPolygonCache: VisibilityPolygon | null = null;
 
   start() {
 
   }
 
   render(simulationRenderingPipeline: SimulationRenderingPipeline) {
+    const { scene } = this.entity;
+    if (!scene) {
+      return;
+    }
+    
+    if (!this.ignoreOverlapEntity) {
+      // TODO Optimize with culling clusters
+      for (const shape of this.getEntityShapes(scene)) {
+        const overlaping = Ray.isPointInsideShape(shape, this.transform.position);
+        if (overlaping) {
+          return;
+        }
+      }
+    }
+
     this.recache = true;
     const visibilityPolygon = this.getVisibilityPolygon();
     this.recache = false;
 
     const { path } = visibilityPolygon;
 
-    const { remove: removeMask } = simulationRenderingPipeline.createMask(path);
+    if (this.renderLight) {
+      const { remove: removeMask } = simulationRenderingPipeline.createMask(path);
 
-    simulationRenderingPipeline.renderRadialGradient(this.transform.position, this.range, [{
-      offset: 0,
-      color: this.color,
-    }, {
-      offset: 0.5,
-      color: Color.transparent,
-    }]);
+      simulationRenderingPipeline.renderRadialGradient(this.transform.position, this.range, [{
+        offset: 0,
+        color: this.color,
+      }, {
+        offset: 0.5,
+        color: Color.createRelativeTransparent(this.color),
+      }]);
 
-    removeMask();
-    simulationRenderingPipeline.renderRadialGradient(this.transform.position, this.range / 5, [{
-      offset: 0,
-      color: new Color(255, 255, 255, 0.3),
-    }, {
-      offset: 0.5,
-      color: Color.transparent,
-    }]);
+      removeMask();
+    }
+
+    for (const projectionedSegments of visibilityPolygon.getObsticleFaceProjectionedSegments()) {
+      const reversedProjectedSegments = [projectionedSegments[1], projectionedSegments[0]] as Shape.Segment;
+
+      const width = projectionedSegments[1].subtract(projectionedSegments[0])
+      const center = Shape.getSegmentCenter(reversedProjectedSegments);
+      const normal = Shape.getSegmentNormal(reversedProjectedSegments);
+
+      const antiNormal = normal.multiply(Vector.reverse);
+
+      const lightToSegmentCenter = center.subtract(this.transform.position);
+      const a = lightToSegmentCenter.magnitude;
+      const b = Math.min(Math.max(a / this.range * 2, 0), 1);
+      const c = 1 - b;
+
+      const dot = Vector.dot(antiNormal, lightToSegmentCenter.normalized);
+
+      if (this.renderReflections) {
+        const { remove: r2b } = simulationRenderingPipeline.createBlur(this.reflectionBloomBlur);
+        simulationRenderingPipeline.renderLinearGradient(center, normal, width.magnitude, [
+          {
+            color: this.color.withAlpha(dot * (c * 2)),
+            offset: 0,
+          },
+          {
+            color: this.color.withAlpha(0),
+            offset: .7,
+          }
+        ])
+  
+        r2b();
+      }
+
+      if (this.renderBloomOverflows) {
+        const { remove: r1b } = simulationRenderingPipeline.createBlur(this.internalBloomBlur);
+        simulationRenderingPipeline.renderLinearGradient(center, antiNormal, width.magnitude, [
+          {
+            color: this.color.withAlpha(dot * this.internalMeshBloom * (c * 2)),
+            offset: 0,
+          },
+          {
+            color: this.color.withAlpha(0),
+            offset: .7,
+          }
+        ])
+        r1b();
+      }
+    }
   }
 
 
-  gizmosRender(gizmos: Gizmos) {
+  public [Component.onGizmosRender](gizmos: Gizmos) {
     const visibilityPolygon = this.getVisibilityPolygon();
     const { path } = visibilityPolygon;
     
     const lineColor = new Color(0, 0, 255, 0.1);
     const vertexColor = Color.blue;
     const vertexHighlightRadius = 0.1;
+
+    gizmos.useMask(path, () => {
+      gizmos.renderCircle(this.transform.position, this.range / 2, Color.blue);
+    });
     
     gizmos.highlightVertices(new Rectangle().withScale(this.range).withOffset(this.transform.position).vertices, new Color(0, 0, 255, 0.1))
     
@@ -82,18 +141,25 @@ export class PointLight extends LightSource {
         gizmos.renderFixedText(path[i], `${i + 1}`, 0.35, Color.red);
       }
     }
-    
-    const list = [
-      `${visibilityPolygon.checkpointVertices.length} total checkpoint vertices`,
-      `${visibilityPolygon.obsticlesWithObsticlesInterimVertices.length} entity to entity overlaping vertices`,
-      `${visibilityPolygon.obsticlesWithBoundsInterimVertices.length} entity overlap vertices with light bounds`,
-      '',
-      `${visibilityPolygon.checkpointRaycasts.length} mask checkpoint raycasts`,
-      `${path.length} mask path vertices`,
-    ]
 
-    for (let i = 0; i < list.length; i++) {
-      gizmos.renderStaticText(new Vector(-16, 3 - i / 2), list[i], 0.5);
+    for (const projectionedSegments of visibilityPolygon.getObsticleFaceProjectionedSegments()) {
+      gizmos.renderLine(projectionedSegments[0], projectionedSegments[1], Color.red, 4)
+      const reversedProjectedSegments = [projectionedSegments[1], projectionedSegments[0]] as Shape.Segment;
+
+      const center = Shape.getSegmentCenter(reversedProjectedSegments);
+      const normal = Shape.getSegmentNormal(reversedProjectedSegments).normalized;
+
+      const antiNormal = normal.multiply(Vector.reverse).normalized;
+
+
+      const lightToSegmentCenter = center.subtract(this.transform.position);
+      const a = lightToSegmentCenter.magnitude;
+      const b = Math.min(Math.max(a / this.range * 2, 0), 1);
+      const c = 1 - b;
+
+      const dot = Vector.dot(antiNormal, center.subtract(this.transform.position).normalized);
+
+      gizmos.renderDirectionalLine(center, normal.multiply(dot, c), Color.red);
     }
   }
 
@@ -133,12 +199,23 @@ export class PointLight extends LightSource {
     const scene = this.entity.scene!;
     const entityShapes = this.getEntityShapes(scene);
     const lightBounds = this.getBounds();
-    const panoramaVisibilityPolygon = new PanoramaVisibilityPolygon({
+
+    if (this.usePhysicalRendering) {
+      const physicalBasedPanoramaVisibilityPolygon = new PanoramaVisibilityPolygon({
+        fulcrum: this.transform.position,
+        obsticles: entityShapes,
+        externalMasks: [lightBounds],
+      });
+
+      return this.visibilityPolygonCache = physicalBasedPanoramaVisibilityPolygon;
+    }
+
+    const simplePanoramaVisibilityPolygon = new PanoramaVisibilityPolygon({
       fulcrum: this.transform.position,
-      obsticles: entityShapes,
+      obsticles: [],
       externalMasks: [lightBounds],
     });
 
-    return this.visibilityPolygonCache = panoramaVisibilityPolygon;
+    return this.visibilityPolygonCache = simplePanoramaVisibilityPolygon;
   }
 }

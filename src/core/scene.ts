@@ -223,7 +223,8 @@ export class Scene implements Iterable<Entity> {
       componentConstructor,
       entity,
     }
-
+    
+    this.addActionRequest(componentDestructionRequest)
     return componentDestructionRequest;
   }
 
@@ -314,6 +315,17 @@ export class Scene implements Iterable<Entity> {
     entity.parent?.['children'].delete(entity);
     entity['parentScene'] = null;
     entity['parentEntity'] = null;
+
+    // for (const children of entity.getFlattenChildren()) {
+    //   this.entityInstances.delete(children);
+    // }
+
+    for (const children of entity.getChildren()) {
+      this.requestEntityDestruction(children);
+    }
+
+    console.log(this);
+
     return true;
   }
 
@@ -337,13 +349,14 @@ export class Scene implements Iterable<Entity> {
   private resolveComponentDestructionRequest(componentDestructionRequest: Scene.ActionRequests.ComponentDestruction) {
     const { componentConstructor, entity } = componentDestructionRequest;
 
-    const componentInstance = entity.components['hoistingComponents'].get(componentConstructor);
+    const baseClassOfConstructor = Component.getBaseclassOf(componentConstructor)
+    const componentInstance = entity.components['hoistingComponents'].get(baseClassOfConstructor);
     if (!componentInstance) {
       return false;
     }
 
     this.componentInstances.delete(componentInstance);
-    entity.components['hoistingComponents'].delete(componentConstructor);
+    entity.components['hoistingComponents'].delete(baseClassOfConstructor);
     
     return true;
   }

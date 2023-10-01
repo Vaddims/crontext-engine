@@ -1,7 +1,9 @@
+import { Transformator } from "objectra";
 import { Component, Vector } from "../../core";
 import { Gravity } from "../gravity";
 import { Rigidbody } from "../rigidbody";
 
+@Transformator.Register()
 export class PointGravity extends Gravity {
   public offset = Vector.zero;
   

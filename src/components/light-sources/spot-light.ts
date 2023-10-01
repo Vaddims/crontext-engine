@@ -1,4 +1,5 @@
-import { Color, Ray, Shape, Transform, Vector } from "../../core";
+import { Transformator } from "objectra";
+import { Color, Component, Ray, Shape, Transform, Vector } from "../../core";
 import { Gizmos } from "../../core/gizmos";
 import { VisibilityPolygon } from "../../core/visibility-polygon";
 import { SectorVisibilityPolygon } from "../../core/visibility-polygons/sector-visibility-polygon";
@@ -13,14 +14,7 @@ interface RaycastCheckpoint {
   endpointSegment?: Shape.Segment,
 }
 
-
-const boundsOverlaping = (a: Shape, b: Shape) => {
-  const av = a.vertices;
-  const bv = b.vertices;
-
-  return av[1].x > bv[0].x && av[0].x < bv[1].x && av[0].y > bv[3].y && av[3].y < bv[0].y;
-}
-
+@Transformator.Register()
 export class SpotLight extends LightSource {
   public range = 30;
   public angle = Math.PI / 4;
@@ -30,24 +24,27 @@ export class SpotLight extends LightSource {
   public color = Color.white;
   private readonly raycastInaccuracy = 0.00001;
 
+  @Transformator.Exclude()
+  public visibilityPolygonCache: VisibilityPolygon | null = null;
+
   render(simulationRenderingPipeline: SimulationRenderingPipeline) {
     const { renderer } = simulationRenderingPipeline;
     const visibilityPolygon = this.getVisibilityPolygon(renderer);
 
     const { remove: removeMask } = simulationRenderingPipeline.createMask(visibilityPolygon.path);
-
+    
     simulationRenderingPipeline.renderRadialGradient(this.transform.position, this.range, [{
       offset: 0,
       color: this.color,
     }, {
       offset: 0.5,
-      color: Color.transparent,
+      color: Color.createRelativeTransparent(this.color),
     }]);
 
     removeMask();
   }
 
-  gizmosRender(gizmos: Gizmos) {
+  public [Component.onGizmosRender](gizmos: Gizmos) {
     const visibilityPolygon = this.getVisibilityPolygon(gizmos.renderer);
     const { path } = visibilityPolygon;
     
@@ -55,6 +52,10 @@ export class SpotLight extends LightSource {
 
     gizmos.highlightVertices(new Rectangle().withScale(this.range).withOffset(this.transform.position).vertices, new Color(0, 0, 255, 0.1))
     
+    gizmos.useMask(path, () => {
+      gizmos.renderCircle(this.transform.position, this.range / 2, Color.blue);
+    });
+
     if (path) {
       gizmos.highlightVertices(path, Color.blue);
     }
@@ -75,19 +76,18 @@ export class SpotLight extends LightSource {
       }
     }
 
-    const list = [
-      `${visibilityPolygon.checkpointVertices.length} total checkpoint vertices`,
-      `${visibilityPolygon.obsticlesWithObsticlesInterimVertices.length} entity to entity overlaping vertices`,
-      `${visibilityPolygon.obsticlesWithBoundsInterimVertices.length} entity overlap vertices with light bounds`,
-      '',
-      `${visibilityPolygon.checkpointRaycasts.length} mask checkpoint raycasts`,
-      `${path.length} mask path vertices`,
-      `${this.angle.toFixed(2)} basis angle`,
-    ]
+    // for (const [ shareSegment, ee ] of visibilityPolygon.) {
+    //   for (const visibleSegment of visibilityPolygon.visibleObsticleSegments) {
+    //     if (shareSegment === visibleSegment) {
+    //       gizmos.renderLine(shareSegment[0], shareSegment[1], Color.red);
+    //     }
+    //   }
+    // }
+    
 
-    for (let i = 0; i < list.length; i++) {
-      gizmos.renderStaticText(new Vector(-16, 3 - i / 2), list[i], 0.5);
-    }
+    // visibilityPolygon..forEach(segment => {
+    //   gizmos.renderLine(segment[0], segment[1], Color.red);
+    // })
   }
 
   private getEntityShapes(lightBounds: Shape) {
@@ -104,7 +104,7 @@ export class SpotLight extends LightSource {
       const positionedShape = new Shape(positionedVertices);
 
       const entityBounds = new Shape(positionedVertices).bounds;
-      if (!boundsOverlaping(entityBounds, lightBounds)) {
+      if (!entityBounds.overlaps(entityBounds)) {
         continue;
       }
 

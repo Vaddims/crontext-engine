@@ -6,6 +6,7 @@ import { Vector } from "../core/vector";
 import { Optic } from "../core/optic";
 import { rotatedOffsetPosition } from "../utils/crontext-math";
 import { Color, Transform } from "../core";
+import { Rectangle } from "../shapes";
 
 interface RadialGradientColorStop {
   offset: number;
@@ -23,8 +24,8 @@ export class SimulationRenderingPipeline<T extends SimulationRenderer = Simulati
     this.optic = optic;
   }
 
-  protected getRenderingPosition(position: Vector) {
-    return position.subtract(this.optic.scenePosition).multiply(this.optic.scaledPixelsPerUnit(), Vector.reverseY);
+  protected getRenderingPosition(position: Vector, rotation: number = 0) {
+    return rotatedOffsetPosition(position.subtract(this.optic.scenePosition), rotation -this.optic.rotation).multiply(this.optic.scaledPixelsPerUnit(), Vector.reverseY);
   }
 
   public defineShapePath(shape: Shape) {
@@ -47,10 +48,9 @@ export class SimulationRenderingPipeline<T extends SimulationRenderer = Simulati
     const { context } = this;
 
     const renderingPosition = this.getRenderingPosition(position);
-    const translate = rotatedOffsetPosition(renderingPosition, opticRotation);
 
     context.save();
-    context.translate(...translate.raw);
+    context.translate(...renderingPosition.raw);
     this.defineShapePath(shape);
     context.fillStyle = context.strokeStyle = color.toString();
     if (shape.vertices.length >= 3) {
@@ -128,6 +128,17 @@ export class SimulationRenderingPipeline<T extends SimulationRenderer = Simulati
     context.restore();
   }
 
+  public createBlur(intence: number) {
+    const { context } = this;
+
+    context.save();
+    context.filter = `blur(${intence}px)`;
+
+    return {
+      remove: () => context.restore(),
+    }
+  }
+
   public createMask(vertices: readonly Vector[] | Vector[]) {
     const { context } = this;
 
@@ -168,7 +179,25 @@ export class SimulationRenderingPipeline<T extends SimulationRenderer = Simulati
     context.fillStyle = gradient;
     context.fillRect(-radiusRenderingScale, -radiusRenderingScale, radiusRenderingScale * 2, radiusRenderingScale * 2) //...toRP(new Vector(r2RenderingScale, -r2RenderingScale)).raw)
     context.restore()
-    
+  }
+
+  public renderLinearGradient(fulcrum: Vector, directionalOffset: Vector, width: number, colorStops: RadialGradientColorStop[]) {
+    const { context } = this;
+
+    const end = fulcrum.add(directionalOffset);
+    const center = fulcrum.add(directionalOffset.divide(2));
+
+    const gradient = context.createLinearGradient(...this.getRenderingPosition(fulcrum).raw, ...this.getRenderingPosition(end).raw);
+    for (const { offset, color } of colorStops) {
+      gradient.addColorStop(offset, color.toString());
+    }
+
+    context.save();
+    context.fillStyle = gradient;
+    const shape = new Rectangle().withScale(new Vector(directionalOffset.magnitude, width)).withOffset(rotatedOffsetPosition(center.add(this.optic.scenePosition.multiply(Vector.reverse)), -this.optic.rotation)).withRotation(directionalOffset.rotation() - this.optic.rotation)
+    this.defineShapePath(shape)
+    context.fill();
+    context.restore();
   }
 
   public outlineShape(shape: Shape, color = Color.black) {

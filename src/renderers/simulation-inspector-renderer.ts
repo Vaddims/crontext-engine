@@ -151,8 +151,6 @@ export class SimulationInspectorRenderer extends Renderer {
   }
   
   public render(): void {
-    const renderStartStamp = performance.now();
-
     const { context, canvasSize } = this;
     const { scene, renderer } = this.inspector.simulation;
 

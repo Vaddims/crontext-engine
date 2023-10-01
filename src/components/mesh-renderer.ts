@@ -1,5 +1,5 @@
 import { Transformator } from "objectra";
-import { Component, Transform } from "../core";
+import { Component, Transform, Vector } from "../core";
 import { Color } from "../core/color";
 import { Shape } from "../core/shape";
 import { Rectangle } from "../shapes/rectangle";

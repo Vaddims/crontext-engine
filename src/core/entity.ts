@@ -24,6 +24,7 @@ export class Entity {
   public readonly layers = new EntityLayerSystem();
   private readonly children = new Set<Entity>();
 
+  @Transformator.Exclude()
   private readonly cache: { [key: string]: any } = {};
 
   public establishCacheConnection<T>(key: string) {

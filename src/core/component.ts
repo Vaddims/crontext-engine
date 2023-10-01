@@ -6,6 +6,7 @@ import { Entity } from "./entity";
 import { EntityTransform } from "./entity-transform";
 import { Gizmos } from "./gizmos";
 import { Scene } from "./scene";
+import { Constructor } from "objectra/dist/types/util.types";
 
 @Transformator.Register()
 export class Component {
@@ -36,6 +37,10 @@ export class Component {
         initiator: this,
       });
     }
+  }
+
+  public destroy() {
+    return this.entity.components.destroy(this.constructor as Constructor<Component>);
   }
 
   public static getBaseclassOf(componentConstructor: ComponentConstructor) {

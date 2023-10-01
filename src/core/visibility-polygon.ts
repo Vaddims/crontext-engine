@@ -71,6 +71,16 @@ export class VisibilityPolygonSegmentShareMap extends Map<Shape.Segment, Vector[
   verticesShareSegment(a: Vector, b: Vector) {
     return Array.from(this.values()).some(vertices => vertices.includes(a) && vertices.includes(b));
   }
+
+  getSegmentOfVertex(vertex: Vector) {
+    for (const [segment, vertices] of this) {
+      if (vertices.includes(vertex)) {
+        return segment;
+      }
+    }
+
+    return null;
+  }
 }
 
 export class VisibilityPolygon {
@@ -91,6 +101,8 @@ export class VisibilityPolygon {
   public readonly obsticlesWithObsticlesInterimVertices: Vector[];
 
   public readonly intersections: Shape.SegmentIntersection[] = [];
+
+  public readonly frontProjectionSegments: Shape.Segment[] = [];
 
   protected constructor(options: VisibilityPolygonCreationOptions) {
     const { fulcrum, obsticles, skipObsticleCulling, externalMasks } = options;
@@ -130,6 +142,23 @@ export class VisibilityPolygon {
 
   public [Symbol.iterator]() {
     return this.path;
+  }
+
+  public getObsticleFaceProjectionedSegments() {
+    const faceProjectionedSegments: Shape.Segment[] = [];
+
+    for (const projectionSegment of this.frontProjectionSegments) {
+      const segment = this.segmentShareMap.getSegmentOfVertex(projectionSegment[0]);
+      const segment2 = this.segmentShareMap.getSegmentOfVertex(projectionSegment[1]);
+
+      if (!segment || !segment2 || this.externalMaskBounds.segments.includes(segment) || this.externalMaskBounds.segments.includes(segment2)) {
+        continue;
+      }
+
+      faceProjectionedSegments.push(projectionSegment)
+    }
+
+    return faceProjectionedSegments;
   }
 
   private cachedShape: Shape | null = null;
@@ -203,9 +232,11 @@ export class VisibilityPolygon {
   }
 
   protected establishExposedConnection(currentCheckpointRaycast: CheckpointRaycast, previousCheckpointRaycast: CheckpointRaycast) {
-    const { segmentShareMap, path } = this;
+    const { segmentShareMap, path, frontProjectionSegments } = this;
     if (segmentShareMap.verticesShareSegment(currentCheckpointRaycast.exposed, previousCheckpointRaycast.exposed)) {
       path.push(currentCheckpointRaycast.exposed);
+      frontProjectionSegments.push([currentCheckpointRaycast.exposed, previousCheckpointRaycast.exposed]);
+
       if (currentCheckpointRaycast.endpoint) {
         path.push(currentCheckpointRaycast.endpoint);
       }
@@ -217,7 +248,7 @@ export class VisibilityPolygon {
   }
 
   protected establishEndpointConnection(currentCheckpointRaycast: CheckpointRaycast, previousCheckpointRaycast: CheckpointRaycast) {
-    const { segmentShareMap, path } = this;
+    const { segmentShareMap, path, frontProjectionSegments } = this;
 
     if (
       currentCheckpointRaycast.endpoint &&
@@ -225,6 +256,7 @@ export class VisibilityPolygon {
       segmentShareMap.verticesShareSegment(currentCheckpointRaycast.endpoint, previousCheckpointRaycast.endpoint)
     ) {
       path.push(currentCheckpointRaycast.endpoint, currentCheckpointRaycast.exposed);
+      frontProjectionSegments.push([currentCheckpointRaycast.endpoint, previousCheckpointRaycast.endpoint]);
       return true;
     }
     
@@ -232,13 +264,15 @@ export class VisibilityPolygon {
   }
 
   protected establishIncreasingConnection(currentCheckpointRaycast: CheckpointRaycast, previousCheckpointRaycast: CheckpointRaycast) {
-    const { segmentShareMap, path } = this;
+    const { segmentShareMap, path, frontProjectionSegments } = this;
 
     if (
       currentCheckpointRaycast.endpoint &&
       segmentShareMap.verticesShareSegment(currentCheckpointRaycast.endpoint, previousCheckpointRaycast.exposed)
     ) {
       path.push(currentCheckpointRaycast.endpoint, currentCheckpointRaycast.exposed);
+      frontProjectionSegments.push([currentCheckpointRaycast.endpoint, previousCheckpointRaycast.exposed])
+
       return true;
     }
 
@@ -246,13 +280,15 @@ export class VisibilityPolygon {
   }
 
   protected establishDecreasingConnection(currentCheckpointRaycast: CheckpointRaycast, previousCheckpointRaycast: CheckpointRaycast) {
-    const { segmentShareMap, path } = this;
+    const { segmentShareMap, path, frontProjectionSegments } = this;
 
     if (
       previousCheckpointRaycast.endpoint &&
       segmentShareMap.verticesShareSegment(currentCheckpointRaycast.exposed, previousCheckpointRaycast.endpoint)
     ) {
       path.push(currentCheckpointRaycast.exposed);
+      frontProjectionSegments.push([currentCheckpointRaycast.exposed, previousCheckpointRaycast.endpoint])
+
       if (currentCheckpointRaycast.endpoint) {
         path.push(currentCheckpointRaycast.endpoint);
       }

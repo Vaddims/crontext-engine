@@ -59,6 +59,17 @@ export class Shape {
     return this.vertices.values();
   }
 
+  public static getSegmentCenter(segment: Shape.Segment) {
+    const difference = segment[1].subtract(segment[0]);
+    const center = difference.divide(2).add(segment[0]);
+    return center;
+  }
+
+  public static getSegmentNormal(segment: Shape.Segment) {
+    const [ p1, p2 ] = segment;
+    return new Vector(-(p2.y - p1.y), (p2.x - p1.x)).normalized;
+  }
+
   public static segmentIntersections(a: Shape, b: Shape) {
     const intersections: Shape.SegmentIntersection[] = [];
     for (let i = 0; i < a.segments.length; i++) {

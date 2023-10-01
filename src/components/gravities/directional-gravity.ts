@@ -1,8 +1,10 @@
+import { Transformator } from "objectra";
 import { Component, Vector } from "../../core";
 import { Time } from "../../core/time";
 import { Gravity } from "../gravity";
 import { Rigidbody } from "../rigidbody";
 
+@Transformator.Register()
 export class DirectionalGravity extends Gravity {
   public direction = Vector.zero;
 
