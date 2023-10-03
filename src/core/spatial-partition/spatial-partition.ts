@@ -3,6 +3,7 @@ import { SpatialPartitionCluster } from './spatial-partition-cluster';
 import { Transformator } from 'objectra';
 import { Shape } from '../shape';
 import { getBaseLog } from '../../utils';
+import { Vector } from '../vector';
 
 @Transformator.Register()
 export class SpatialPartition<T> {
@@ -123,6 +124,10 @@ export class SpatialPartition<T> {
 
     branches.push(...this.getFlattenSubBranches(workBranch));
     return branches;
+  }
+
+  public getClusterFromPoint(position: Vector, level = 1) {
+    return SpatialPartitionCluster.createFromPoint(position, level, this.clusterOpacity);
   }
 
   public getBoundingBoxHeightTraceElements(shape: Shape) {
@@ -356,6 +361,68 @@ export class SpatialPartition<T> {
     }
 
     return lookupPath;
+  }
+
+  public *rayTraceClusters(startVector: Vector, endVector: Vector, level = 0): Generator<SpatialPartitionCluster, void, void> {
+    const operator = 1 / SpatialPartitionCluster.getFirstLevelClusterQuantity(level, this.clusterOpacity);
+    const gridOffsetBias = 0.5;
+
+    const start = startVector.multiply(operator).add(gridOffsetBias);
+    const end = endVector.multiply(operator).add(gridOffsetBias);
+
+    let [ x, y ] = Vector.floor(start).raw;
+    const difference = end.subtract(start);
+    const step = Vector.sign(difference);
+    
+    //Straight distance to the first vertical grid boundary.
+    const xOffset = (
+      end.x > start.x
+      ? (Math.ceil(start.x) - start.x)
+      : (start.x - Math.floor(start.x))
+    );
+
+    //Straight distance to the first horizontal grid boundary.
+    const yOffset = (
+      end.y > start.y
+      ? (Math.ceil(start.y) - start.y) 
+      : (start.y - Math.floor(start.y))
+    );
+
+    const angle = Math.atan2(-difference.y, difference.x);
+
+    // Divide by 0 === Infinity
+
+    //How far to move along the ray to move horizontally 1 grid cell.
+    const tDeltaX = 1 / Math.cos(angle);
+    
+    //How far to move along the ray to move vertically 1 grid cell.
+    const tDeltaY = 1 / Math.sin(angle);
+  
+    //How far to move along the ray to cross the first vertical grid cell boundary.
+    let tMaxX = xOffset / Math.cos(angle);
+
+    //How far to move along the ray to cross the first horizontal grid cell boundary.
+    let tMaxY = yOffset / Math.sin(angle);
+    
+    //Travel one grid cell at a time.
+    const manhattanDistance = (
+      Math.abs(Math.floor(end.x) - Math.floor(start.x)) +
+      Math.abs(Math.floor(end.y) - Math.floor(start.y))
+    );
+
+    for (let t = 0; t <= manhattanDistance; t++) {
+      const gridCell = new Vector(x, y).divide(operator);
+      yield this.getClusterFromPoint(gridCell, level);
+
+      //Only move in either X or Y coordinates, not both.
+      if (Math.abs(tMaxX) < Math.abs(tMaxY)) {
+        tMaxX += tDeltaX;
+        x += step.x;
+      } else {
+        tMaxY += tDeltaY;
+        y += step.y;
+      }
+    }
   }
 }
 

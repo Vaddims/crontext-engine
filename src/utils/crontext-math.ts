@@ -1,4 +1,4 @@
-import { Shape } from "../core";
+import type { Shape } from "../core";
 import { Vector } from "../core/vector";
 import { Circle } from "../shapes";
 
@@ -40,19 +40,6 @@ export function pointSegmentDistance(point: Vector, segment: Shape.Segment) {
     distanceSquared,
     contactPoint,
   }
-
-  // const segmentVector = segment[1].subtract(segment[0]);
-  // const pointToStartVector = point.subtract(segment[0]);
-
-  // const segmentLengthSquared = Vector.dot(segmentVector, segmentVector);
-  // if (segmentLengthSquared === 0) {
-  //   return Vector.distance(point, segment[0]);
-  // }
-
-  // const t = Math.max(0, Math.min(1, Vector.dot(pointToStartVector, segmentVector) / segmentLengthSquared));
-  // const projectedPoint = segment[0].add(segmentVector.multiply(t));
-  
-  // return Vector.distance(point, projectedPoint);
 }
 
 export function lineWithLineIntersection(segment1: Shape.Segment, segment2: Shape.Segment) {

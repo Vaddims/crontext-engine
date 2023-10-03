@@ -180,46 +180,19 @@ export class SimulationInspectorRenderer extends Renderer {
     renderingPipeline.renderMeshMarkup(this.canvasSize);
     
     const bounds = this.getBounds(renderer);
-    const boundingBoxViewportTraceEntities = scene.spatialPartition.getBoundingBoxHeightTraceElements(bounds);
+    const boundingBoxViewportTraceMeshRenderers = scene.meshRendererSpatialPartition.getBoundingBoxHeightTraceElements(bounds);
 
-    const viewportEntities = new Set<Entity>();
-    for (const entity of boundingBoxViewportTraceEntities) {
-      const meshRenderer = entity.components.find(MeshRenderer);
-      if (!meshRenderer) {
-        continue;
-      }
-
+    const viewportMeshrenderers = new Set<MeshRenderer>();
+    for (const meshRenderer of boundingBoxViewportTraceMeshRenderers) {
       if (!BoundingBox.boundsOverlap(bounds, new Shape(meshRenderer.relativeVerticesPosition()).bounds)) {
         continue;
       }
 
-      viewportEntities.add(entity);
+      viewportMeshrenderers.add(meshRenderer);
     }
 
-    for (const entity of viewportEntities) {
-      const meshRenderer = entity.components.find(MeshRenderer);
-      if (!meshRenderer) {
-        continue;
-      }
-      
-      renderingPipeline.renderEntityMesh(meshRenderer);
-    }
-
-    const cameras = scene.getCameras();
-    for (const camera of cameras) {
-      for (const entity of camera['boundingBoxViewportTraceEntities']) {
-        const meshRenderer = entity.components.find(MeshRenderer);
-        if (!meshRenderer) {
-          continue;
-        }
-      }
-
-      for (const entity of camera['viewportEntities']) {
-        const meshRenderer = entity.components.find(MeshRenderer);
-        if (!meshRenderer) {
-          continue;
-        }
-      }
+    for (const viewportMeshRenderer of viewportMeshrenderers) {
+      renderingPipeline.renderEntityMesh(viewportMeshRenderer);
     }
 
     for (const component of scene.getComponents()) {

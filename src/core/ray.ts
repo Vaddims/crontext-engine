@@ -1,9 +1,10 @@
-import { Collider } from "../components";
-import { lineWithDiretionIntersection } from "../utils";
+import { Collider, MeshRenderer } from "../components";
+import { lineWithDiretionIntersection, segmentWithSegmentIntersection } from "../utils";
 import { Collision } from "./collision";
 import { Entity } from "./entity";
 import { Scene } from "./scene";
 import { Shape } from "./shape";
+import { SpatialPartition } from "./spatial-partition/spatial-partition";
 import { Vector } from "./vector";
 
 export interface RayResolution {
@@ -43,7 +44,10 @@ export class Ray {
     }
   }
 
-  constructor(readonly pivot: Vector, readonly direction: Vector, readonly distance = Infinity) {}
+  public readonly endpoint: Vector;
+  constructor(readonly pivot: Vector, readonly direction: Vector, readonly distance = Infinity) {
+    this.endpoint = pivot.add(direction.multiply(distance))
+  }
 
   cast(scene: Scene, options?: RayCastOptions): SceneRayResolution | null;
   cast(shapes: Shape[] | readonly Shape[], options?: RayCastOptions): ShapeRayResolution | null;
@@ -187,6 +191,11 @@ export class Ray {
     return intersection;
   }
 
+  public detectX(startVertex: Vector, endVertex: Vector) {
+    const intersection = segmentWithSegmentIntersection([this.pivot, this.endpoint], [startVertex, endVertex]);
+    return intersection;
+  }
+
 
   public static isPointInside(scene: Scene, point: Vector) {
     const ray = new Ray(point, Vector.right)
@@ -209,5 +218,83 @@ export class Ray {
     const ray = new Ray(point, Vector.right)
     const resolutions = ray.shapeResearch([shape]);
     return resolutions.length === 1;
+  }
+
+  // MeshRenderer Spatial Partiation
+  public useMRSP(meshRendererSpatialPartition: SpatialPartition<MeshRenderer>) {
+    if (this.distance === Infinity) {
+      throw new Error('While using incrimental raycast, the distance must be defined');
+    }
+
+    const cast = (options?: RayCastOptions) => {
+      const { shapeMask = [], segmentMask = [] } = options ?? {};
+
+      type MRSPSceneRayResolution = SceneRayResolution & {
+        meshRenderer: MeshRenderer;
+      }
+
+      let rayResolution: MRSPSceneRayResolution | null = null;
+      const clusterGenerator = meshRendererSpatialPartition.rayTraceClusters(this.pivot, this.endpoint);
+
+      const a = new Map<MeshRenderer, Shape>();
+      for (const cluster of clusterGenerator) {
+        const heightTrace = meshRendererSpatialPartition.getHeightTrace(cluster);
+        const meshRenderers = heightTrace.map(branch => [...branch.elements]).flat();
+
+        const shapes: Shape[] = [];
+        
+        // TODO Optimize (save intersections out of the box, and use them to calculate the nearest one in the next iterations)
+        for (const meshRenderer of meshRenderers) {
+          const aa = a.get(meshRenderer);
+          if (aa) {
+            shapes.push(aa);
+          } else {
+            const shape = new Shape(meshRenderer.relativeVerticesPosition());
+            shapes.push(shape);
+            a.set(meshRenderer, shape);
+          }
+        }
+
+        const resolutions: MRSPSceneRayResolution[] = [];
+        for (const shape of shapes) {
+          for (const segment of shape.segments) {
+            const intersectionPosition = this.detectX(...segment);
+            if (!intersectionPosition) {
+              continue;
+            }
+
+            const segmentVertexIndexes = [
+              shape.vertices.indexOf(segment[0]),
+              shape.vertices.indexOf(segment[1]),
+            ] as const;
+
+            const aa = [...a].find(([m, sh]) => sh === shape)?.[0]!;
+      
+            resolutions.push({
+              pivot: this.pivot,
+              distance: this.distance,
+              direction: this.direction,
+              intersectionPosition,
+              segmentVertexIndexes,
+              segment,
+              shape,
+              entity: aa.entity,
+              meshRenderer: aa,
+            })
+          }
+        }
+
+        rayResolution = this.nearestResolution(resolutions);
+        if (rayResolution) {
+          break;
+        }
+      }
+
+      return rayResolution;
+    }
+
+    return {
+      cast
+    }
   }
 }

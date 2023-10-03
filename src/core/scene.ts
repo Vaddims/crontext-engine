@@ -1,11 +1,12 @@
 import { Component, ComponentConstructor } from "./component";
 import { Entity } from "./entity";
-import { Objectra, Transformator } from 'objectra';
+import { Objectra, Transformator, transformators } from 'objectra';
 import { pushElementToMapValue } from "../utils/buildin-helpers";
 import { type MeshRenderer, type Camera } from "../components";
 import { Shape } from "./shape";
 import { SpatialPartitionCluster } from "./spatial-partition/spatial-partition-cluster";
 import { SpatialPartition } from "./spatial-partition/spatial-partition";
+import { getBaseLog } from "../utils";
 import { Constructor } from "objectra/dist/types/util.types";
 
 @Transformator.Register<Scene>()
@@ -22,13 +23,21 @@ export class Scene implements Iterable<Entity> {
   private readonly actionRequestResult = new WeakMap<Scene.ActionRequest, unknown>();
 
   @Transformator.Exclude()
-  public spatialPartition = new SpatialPartition<Entity>(3);
+  public readonly meshRendererSpatialPartition = new SpatialPartition<MeshRenderer>(3);
 
-  public recacheEntitySpatialPartition(entity: Entity) {
+  public recacheMeshRendererSpatialPartition(meshRenderer: MeshRenderer) {
+    const getShapeAppropriateClusterLevel = (shape: Shape) => {
+      const epsilonBias = 0.01;
+      const boundsScale = shape.bounds.getScale();
+      const maxScale = Math.max(boundsScale.x, boundsScale.y);
+      const clusterLevel = Math.ceil(getBaseLog(this.meshRendererSpatialPartition.clusterOpacity, maxScale + epsilonBias));
+      return clusterLevel;
+    }
+
     const getBelongingClusters = (bounds: Shape, level: number) => {
       const belongingClusters = [];
       boundloop: for (let i = 0; i < bounds.vertices.length; i++) {
-        const cluster = SpatialPartitionCluster.createFromPoint(bounds.vertices[i], level, this.spatialPartition.clusterOpacity);
+        const cluster = SpatialPartitionCluster.createFromPoint(bounds.vertices[i], level, this.meshRendererSpatialPartition.clusterOpacity);
         if (i === 0) {
           belongingClusters.push(cluster);
           continue;
@@ -46,24 +55,10 @@ export class Scene implements Iterable<Entity> {
       return belongingClusters;
     }
 
-    // TODO Use collider instead of mesh renderer
-    const meshRenderer = Array.from(entity.components).find(component => component.constructor.name === 'MeshRenderer') as MeshRenderer;
-    if (!meshRenderer) {
-      return;
-    }
+    const meshRendererShape = new Shape(meshRenderer.relativeVerticesPosition());
+    const clusterLevel = getShapeAppropriateClusterLevel(meshRendererShape);
 
-    const bounds = new Shape(meshRenderer.relativeVerticesPosition()).bounds;
-    const boundsScale = bounds.getScale();
-    const maxScale = Math.max(boundsScale.x, boundsScale.y);
-
-    function getBaseLog(x: number, y: number) {
-      return Math.log(y) / Math.log(x);
-    }
-
-    const epsilonBias = 0.01;
-    const clusterLevel = Math.ceil(getBaseLog(this.spatialPartition.clusterOpacity, maxScale + epsilonBias));
-
-    const entitySPCCache = entity.establishCacheConnection<SpatialPartitionCluster[] | null>('spc');
+    const entitySPCCache = meshRenderer.entity.establishCacheConnection<SpatialPartitionCluster[] | null>('spc');
     const boundClusters = entitySPCCache.get();
     const bcs = boundClusters ? [...boundClusters] : null;
     entitySPCCache.set([]);
@@ -71,17 +66,17 @@ export class Scene implements Iterable<Entity> {
     // remove previous clusters
     if (bcs) {
       for (const boundCluster of bcs) {
-        this.spatialPartition.modifyClusterElements(boundCluster, (elements) => {
-          elements.delete(entity);
+        this.meshRendererSpatialPartition.modifyClusterElements(boundCluster, (elements) => {
+          elements.delete(meshRenderer);
         });
       }
     }
 
     // add new clusters
-    const newBoundClusters = getBelongingClusters(bounds, clusterLevel) //.map(cluster => Objectra.duplicate(cluster));
+    const newBoundClusters = getBelongingClusters(meshRendererShape.bounds, clusterLevel);
 
     for (const boundCluster of newBoundClusters) {
-      this.spatialPartition.injectBranch(boundCluster, [entity]);
+      this.meshRendererSpatialPartition.injectBranch(boundCluster, [meshRenderer]);
     }
     
     entitySPCCache.modify((existingClusters => (
@@ -90,10 +85,11 @@ export class Scene implements Iterable<Entity> {
   }
 
   public recacheSpatialPartition() {
-    const entities = this.getEntities();
-    this.spatialPartition['headBranch'] = null;
-    for (const entity of entities) {
-      this.recacheEntitySpatialPartition(entity);
+    const components = this.getComponents();
+    const meshRenderers = components.filter(component => component.constructor.name === 'MeshRenderer') as MeshRenderer[];
+    this.meshRendererSpatialPartition['headBranch'] = null;
+    for (const meshRenderer of meshRenderers) {
+      this.recacheMeshRendererSpatialPartition(meshRenderer);
     }
   }
 
@@ -137,13 +133,18 @@ export class Scene implements Iterable<Entity> {
     return components;
   }
 
-  public getComponentsOfType<T extends ComponentConstructor>(type: T) {
-    type Instance = InstanceType<T>;
+  public getComponentsOfType<T extends Component>(type: Constructor<T> | string) {
     const components = this.getComponents();
-    const targets: Instance[] = [];
+    const targets: T[] = [];
+
+    const classExpression = (component: Component, classConstructor: Constructor<T>) => component instanceof classConstructor;
+    const stringExpression = (component: Component, className: string) => component.constructor.name === className;
+    const executionExpression = typeof type === 'string' ? stringExpression : classExpression;
+    // Use this for performance
+
     for (const component of components) {
-      if (component instanceof type) {
-        targets.push(component as Instance);
+      if (executionExpression(component, type as any)) {
+        targets.push(component as T);
       }
     }
     
@@ -555,6 +556,7 @@ export class Scene implements Iterable<Entity> {
         return resolve(target);
       }
 
+      // console.log('now', actionEmissionRequest.symbol, self.getComponents(), self);
       switch (target) {
         case ExecutionLevels.Broadcast:
           return resolve(self.getComponents());

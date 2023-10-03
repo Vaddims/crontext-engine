@@ -24,10 +24,10 @@ export class Camera extends Component {
   public background = Color.white;
 
   @Transformator.Exclude()
-  protected viewportEntities = new Set<Entity>();
+  protected viewportMeshRenderers = new Set<MeshRenderer>();
 
   @Transformator.Exclude()
-  protected boundingBoxViewportTraceEntities = new Set<Entity>();
+  protected boundingBoxViewportTraceMeshRenderers = new Set<MeshRenderer>();
 
   render(renderer: SimulationRenderer) {
     const { context, canvasSize } = renderer;
@@ -60,6 +60,27 @@ export class Camera extends Component {
   public [Component.onGizmosRender](gizmos: Gizmos) {
     const bounds = this.getBounds(gizmos.renderer);
     gizmos.highlightVertices(bounds.vertices, Color.blue);
+
+    const { scene } = this.entity;
+    if (scene) {
+      for (const branch of scene.meshRendererSpatialPartition) {
+        const bounds = branch.cluster.getSpaceBounds();
+        gizmos.highlightVertices(bounds.vertices, new Color(0, 0, 255, 0.1));
+      }
+    }
+
+    const {
+      boundingBoxViewportTraceMeshRenderers,
+      viewportMeshRenderers,
+    } = this.viewportCullingMask(gizmos.renderer);
+
+    for (const meshRenderer of boundingBoxViewportTraceMeshRenderers) {
+      gizmos.highlightVertices(meshRenderer.relativeVerticesPosition(), Color.red);
+    }
+
+    for (const viewportMeshRenderer of viewportMeshRenderers) {
+      gizmos.highlightVertices(viewportMeshRenderer.relativeVerticesPosition(), Color.green);
+    }
   }
 
   protected viewportCullingMask(renderer: Renderer) {
@@ -69,47 +90,37 @@ export class Camera extends Component {
     }
 
     const viewportBoundingBox = this.getBounds(renderer);
-    const boundingBoxViewportTraceEntities = scene.spatialPartition.getBoundingBoxHeightTraceElements(viewportBoundingBox);
+    const boundingBoxViewportTraceMeshRenderers = scene.meshRendererSpatialPartition.getBoundingBoxHeightTraceElements(viewportBoundingBox);
 
-    const viewportEntities = new Set<Entity>();
-    for (const entity of boundingBoxViewportTraceEntities) {
-      const meshRenderer = entity.components.find(MeshRenderer);
-      if (!meshRenderer) {
-        continue;
-      }
-
+    const viewportMeshRenderers = new Set<MeshRenderer>();
+    for (const meshRenderer of boundingBoxViewportTraceMeshRenderers) {
       if (!BoundingBox.boundsOverlap(viewportBoundingBox, new Shape(meshRenderer.relativeVerticesPosition()).bounds)) {
         continue;
       }
 
-      viewportEntities.add(entity);
+      viewportMeshRenderers.add(meshRenderer);
     }
 
     return {
-      boundingBoxViewportTraceEntities,
-      viewportEntities,
+      boundingBoxViewportTraceMeshRenderers,
+      viewportMeshRenderers,
     }
   }
   
   protected renderScene(renderer: SimulationRenderer, renderingPipelineInstance: SimulationRenderingPipeline) {
-    this.boundingBoxViewportTraceEntities.clear();
-    this.viewportEntities.clear();
+    this.boundingBoxViewportTraceMeshRenderers.clear();
+    this.viewportMeshRenderers.clear();
 
     const {
-      boundingBoxViewportTraceEntities,
-      viewportEntities,
+      boundingBoxViewportTraceMeshRenderers,
+      viewportMeshRenderers,
     } = this.viewportCullingMask(renderer);
     
-    this.boundingBoxViewportTraceEntities = boundingBoxViewportTraceEntities;
-    this.viewportEntities = viewportEntities;
+    this.boundingBoxViewportTraceMeshRenderers = boundingBoxViewportTraceMeshRenderers;
+    this.viewportMeshRenderers = viewportMeshRenderers;
 
-    for (const entity of this.viewportEntities) {
-      if (this.layerMask.some(layerMask => entity.layers.has(layerMask))) {
-        continue;
-      }
-
-      const meshRenderer = entity.components.find(MeshRenderer);
-      if (!meshRenderer) {
+    for (const meshRenderer of this.viewportMeshRenderers) {
+      if (this.layerMask.some(layerMask => meshRenderer.entity.layers.has(layerMask))) {
         continue;
       }
 
@@ -120,7 +131,7 @@ export class Camera extends Component {
   public getBounds(renderer: Renderer) {
     const { unitFit, pixelRatio } = renderer;
     const boundaryScale = Vector.one.multiply(unitFit, pixelRatio, this.transform.scale);
-    const boundary = new Rectangle().withTransform(this.transform.toPureTransform().setScale(boundaryScale));
+    const boundary = new Rectangle().withTransform(this.transform.toPureTransform().setScale(boundaryScale)).bounds;
     return boundary;
   }
 

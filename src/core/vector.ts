@@ -105,6 +105,18 @@ export class Vector {
     return new Vector(this.y, this.x);
   }
 
+  static sign(vector: Vector): Vector {
+    return new Vector(Math.sign(vector.x), Math.sign(vector.y));
+  }
+
+  static floor(v: Vector): Vector {
+    return new Vector(Math.floor(v.x), Math.floor(v.y));
+  }
+
+  static ceil(v: Vector): Vector {
+    return new Vector(Math.ceil(v.x), Math.ceil(v.y));
+  }
+
   public static projection(direction: Vector, secondary: Vector): Vector {
     const dotProduct = Vector.dot(direction, secondary);
     const magnitudeSquared = direction.lenghtSquared;
@@ -196,7 +208,10 @@ export class Vector {
   }
 
   public static lerp(a: Vector, b: Vector, t: number) {
-    return a.multiply(t).add(b.multiply(1 - t));
+
+    // A + t * (B - A)
+    // return a.multiply(t).add(b.multiply(1 - t));
+    return b.subtract(a).multiply(t).add(a);
   }
 
   public static round(vector: Vector) {
