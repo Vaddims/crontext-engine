@@ -19,6 +19,7 @@ export abstract class Renderer {
   }
 
   public abstract render(): void;
+  public abstract updateTick(): void;
 
   public canvasPointToCoordinates(optic: Optic, screenPoint: Vector) {
     optic.pixelsPerUnit = this.pixelsPerUnit;

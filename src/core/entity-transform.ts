@@ -27,6 +27,10 @@ export class EntityTransform {
   private internalLocalScale = Vector.one;
   private internalLocalRotation = 0;
 
+  private handleTransformationChange() {
+    this.entity.scene?.recacheEntitySpatialPartition(this.entity);
+  }
+
   public get position() {
     if (this.cachedGlobalPosition) {
       return this.cachedGlobalPosition;
@@ -42,6 +46,8 @@ export class EntityTransform {
     for (const entity of this.entity.getFlattenChildren()) {
       entity.transform.cachedGlobalPosition = null;
     }
+
+    this.handleTransformationChange();
   }
 
   public get localPosition() {
@@ -55,6 +61,8 @@ export class EntityTransform {
     for (const entity of this.entity.getFlattenChildren()) {
       entity.transform.cachedGlobalPosition = null;
     }
+
+    this.handleTransformationChange();
   }
   
   private calculateGlobalPosition() {
@@ -100,6 +108,8 @@ export class EntityTransform {
       entity.transform.cachedGlobalScale = null;
       entity.transform.cachedGlobalPosition = null;
     }
+
+    this.handleTransformationChange();
   }
 
   public get localScale() {
@@ -114,6 +124,8 @@ export class EntityTransform {
       entity.transform.cachedGlobalScale = null;
       entity.transform.cachedGlobalPosition = null;
     }
+
+    this.handleTransformationChange();
   }
 
   public recache() {
@@ -158,6 +170,8 @@ export class EntityTransform {
       entity.transform.cachedGlobalPosition = null;
       entity.transform.cachedGlobalRotation = null;
     }
+
+    this.handleTransformationChange();
   }
 
   public get localRotation() {

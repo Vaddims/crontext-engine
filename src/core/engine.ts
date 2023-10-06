@@ -5,6 +5,7 @@ import { Component } from "./component";
 import { Transformator } from "objectra";
 
 export class Engine {
+  public static fps: number = NaN;
   private static contextSimulation: Simulation | null;
 
   private static readonly registeredSimulations = new Set<Simulation>(); 
@@ -29,5 +30,25 @@ export class Engine {
 
   public static getCanvasRenderer(canvas: HTMLCanvasElement) {
     return Engine.renderers.find(renderer => renderer.canvas === canvas);
+  }
+
+  public static init() {
+    Engine.updateTick();
+  }
+
+  public static updateTick() {
+    const a = performance.now();
+    for (const renderer of Engine.renderers) {
+      renderer.updateTick();
+    }
+
+    const b = performance.now();
+    Engine.fps = 1000 / (b - a);
+
+    requestAnimationFrame(Engine.updateTick);
+  }
+
+  static {
+    Engine.init();
   }
 }

@@ -25,6 +25,14 @@ export class Scene implements Iterable<Entity> {
   @Transformator.Exclude()
   public readonly meshRendererSpatialPartition = new SpatialPartition<MeshRenderer>(3);
 
+  // TODO Add all edge cases
+  public recacheEntitySpatialPartition(entity: Entity) {
+    const mr = [...entity.components].find(component => component.constructor.name === 'MeshRenderer') as MeshRenderer | undefined;
+    if (mr) {
+      this.recacheMeshRendererSpatialPartition(mr);
+    }
+  }
+
   public recacheMeshRendererSpatialPartition(meshRenderer: MeshRenderer) {
     const getShapeAppropriateClusterLevel = (shape: Shape) => {
       const epsilonBias = 0.01;
@@ -59,13 +67,13 @@ export class Scene implements Iterable<Entity> {
     const clusterLevel = getShapeAppropriateClusterLevel(meshRendererShape);
 
     const entitySPCCache = meshRenderer.entity.establishCacheConnection<SpatialPartitionCluster[] | null>('spc');
-    const boundClusters = entitySPCCache.get();
-    const bcs = boundClusters ? [...boundClusters] : null;
-    entitySPCCache.set([]);
+    const cachedBoundClusters = entitySPCCache.get();
+    const boundClusters = cachedBoundClusters ? [...cachedBoundClusters] : null;
+    entitySPCCache.set([]); // delete cache
 
-    // remove previous clusters
-    if (bcs) {
-      for (const boundCluster of bcs) {
+    // delete clusters that the element occupais
+    if (boundClusters) {
+      for (const boundCluster of boundClusters) {
         this.meshRendererSpatialPartition.modifyClusterElements(boundCluster, (elements) => {
           elements.delete(meshRenderer);
         });
@@ -82,6 +90,27 @@ export class Scene implements Iterable<Entity> {
     entitySPCCache.modify((existingClusters => (
       existingClusters ? existingClusters.concat(...newBoundClusters) : [...newBoundClusters]
     )));
+  }
+
+  public removeEntitySpatialPartion(entity: Entity) {
+    const meshRenderer = [...entity.components].find(component => component.constructor.name === 'MeshRenderer') as MeshRenderer;
+    if (!meshRenderer) {
+      return;
+    }
+
+    const entitySPCCache = meshRenderer.entity.establishCacheConnection<SpatialPartitionCluster[] | null>('spc');
+    const cachedBoundClusters = entitySPCCache.get();
+    const boundClusters = cachedBoundClusters ? [...cachedBoundClusters] : null;
+    entitySPCCache.set([]); // delete cache
+
+    // delete clusters that the element occupais
+    if (boundClusters) {
+      for (const boundCluster of boundClusters) {
+        this.meshRendererSpatialPartition.modifyClusterElements(boundCluster, (elements) => {
+          elements.delete(meshRenderer);
+        });
+      }
+    }
   }
 
   public recacheSpatialPartition() {
@@ -365,22 +394,60 @@ export class Scene implements Iterable<Entity> {
   private resolvePrimitiveActionRequest(actionRequest: Scene.ActionRequest) {
     const { Types } = Scene.ActionRequest;
 
+    type Resolution = ReturnType<
+      | typeof this.resolveEntityInstantitationRequest
+      | typeof this.resolveEntityTransformationRequest
+      | typeof this.resolveEntityDestructionRequest
+      | typeof this.resolveComponentInstantiationRequest
+      | typeof this.resolveComponentDestructionRequest
+    >
+
+    let resolution: Resolution;
+
     switch(actionRequest.type) {
       case Types.EntityInstantiation:
-        return this.resolveEntityInstantitationRequest(actionRequest);
+        resolution = this.resolveEntityInstantitationRequest(actionRequest);
+        break;
       
       case Types.EntityTransformation:
-        return this.resolveEntityTransformationRequest(actionRequest);
+        resolution = this.resolveEntityTransformationRequest(actionRequest);
+        break;
       
       case Types.EntityDestruction:
-        return this.resolveEntityDestructionRequest(actionRequest);
+        resolution = this.resolveEntityDestructionRequest(actionRequest);
+        break;
 
       case Types.ComponentInstantiation:
-        return this.resolveComponentInstantiationRequest(actionRequest);
+        resolution = this.resolveComponentInstantiationRequest(actionRequest);
+        break;
 
       case Types.ComponentDestruction:
-        return this.resolveComponentDestructionRequest(actionRequest);
+        resolution = this.resolveComponentDestructionRequest(actionRequest);
+        break;
     }
+
+    switch(actionRequest.type) {
+      case Types.EntityInstantiation:
+      case Types.EntityTransformation:
+      case Types.ComponentInstantiation:
+        if (resolution instanceof Entity) {
+          this.recacheEntitySpatialPartition(resolution);
+        }
+
+        if (resolution instanceof Component) {
+          this.recacheEntitySpatialPartition(resolution.entity);
+          break;
+        }
+        break;
+
+      case Types.EntityDestruction:
+      case Types.ComponentDestruction:
+        this.removeEntitySpatialPartion(actionRequest.entity);
+        break;
+
+    }
+
+    return resolution;
   }
 
   private resolveActionRequests() {
@@ -632,9 +699,12 @@ export class Scene implements Iterable<Entity> {
     }
   }
 
+  public start() {
+    this.recacheSpatialPartition();
+  }
+
   public update() {
     this.resolveActionRequests();
-    this.recacheSpatialPartition();
   }
 }
 

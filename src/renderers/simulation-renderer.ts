@@ -12,9 +12,15 @@ export class SimulationRenderer extends Renderer {
     Engine['registeredRenderers'].add(this);
   }
 
+  public updateTick(): void {
+    this.simulation.updateTick();
+    this.render();
+  }
+
   public render() {
     const { context, canvasSize } = this;
     const { scene } = this.simulation;
+    
 
     context.save();
     context.clearRect(0, 0, ...canvasSize.raw);
@@ -24,12 +30,14 @@ export class SimulationRenderer extends Renderer {
     context.closePath();
     context.clip();
 
+    // const a = performance.now();
     for (const camera of scene.getComponentsOfType(Camera)) {
       camera.render(this);
     }
+    // const b = performance.now();
+    // const fps = 1000 / (b - a);
+    // console.log(b - a);
 
     context.restore();
-
-    requestAnimationFrame(this.render.bind(this));
   }
 }

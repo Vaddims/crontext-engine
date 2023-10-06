@@ -111,7 +111,6 @@ export class SimulationInspector {
     }
   }
 
-
   public defineDeltaControls(scenePosition: Vector) {
     const inspectEntityPositionsArithemticMean = Vector.arithemticMean(...[...this.selectedEntities].map(entity => entity.transform.position));
     const controlRotation = this.getControlRotation();

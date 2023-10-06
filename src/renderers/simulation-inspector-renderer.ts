@@ -7,7 +7,7 @@ import { SimulationInspector, TransformMode } from "../simulations/simulation-in
 import { Vector } from "../core/vector";
 import { Camera } from "../components/camera";
 import { Gizmos } from "../core/gizmos";
-import { Component, Entity, Ray, Shape, Space, Transform } from "../core";
+import { Component, Engine, Entity, Ray, Shape, Space, Transform } from "../core";
 import { Circle, Rectangle } from "../shapes";
 import { BoundingBox } from "../shapes/bounding-box";
 import { rotatedOffsetPosition } from "../utils";
@@ -21,10 +21,13 @@ export class SimulationInspectorRenderer extends Renderer {
   public clickedTransformControls = false;
   public transformFace = Vector.one;
 
+  private displayFps = 0;
+
   constructor(canvas: HTMLCanvasElement, simulation: Simulation) {
     super(canvas);
     this.inspector = new SimulationInspector(this, simulation);
-    this.render();
+    Engine['registeredRenderers'].add(this);
+    // this.render();
 
     if (Object.prototype.hasOwnProperty.call(window, 'safari')) {
       canvas.addEventListener('gesturestart', this.gestureStartHandler.bind(this))
@@ -41,6 +44,11 @@ export class SimulationInspectorRenderer extends Renderer {
     canvas.addEventListener('mouseup', this.mouseUpHandler.bind(this));
 
     canvas.addEventListener('keydown', this.keypressHandler.bind(this));
+
+    // setInterval((() => {
+    //   this.displayFps = 0;
+    //   // console.log(this.simulation.fps)
+    // }).bind(this), 333);
   }
 
   public keypressHandler(event: KeyboardEvent) {
@@ -149,6 +157,10 @@ export class SimulationInspectorRenderer extends Renderer {
     const boundary = new Rectangle().withTransform(new Transform(this.inspector.optic.scenePosition, this.inspector.optic.scale, this.inspector.optic.rotation).setScale(boundaryScale));
     return boundary;
   }
+
+  public updateTick(): void {
+    this.render();
+  }
   
   public render(): void {
     const { context, canvasSize } = this;
@@ -219,7 +231,7 @@ export class SimulationInspectorRenderer extends Renderer {
     
     context.restore();
 
-    requestAnimationFrame(this.render.bind(this));
+    renderingPipeline.renderFixedPerformanceBar(Engine.fps);
   }
 
   public get simulation() {

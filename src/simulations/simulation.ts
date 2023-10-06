@@ -11,15 +11,12 @@ export enum SimulationUpdateState {
 }
 
 export class Simulation {
-  
   public interimUpdateQuantity = 1;
 
   public updateOnFrameChange = true;
   private loadedScene: Scene;
   private activeScene: Scene;
   private updateState = SimulationUpdateState.Frozen;
-
-  private lastUpdateTime = performance.now();
   
   constructor(public readonly renderer: Renderer) {
     this.loadedScene = Objectra.duplicate(new Scene());
@@ -43,6 +40,16 @@ export class Simulation {
     return this.activeScene;
   }
 
+  updateTick() {
+    if (this.updateState === SimulationUpdateState.Frozen) {
+      return;
+    }
+
+    if (this.updateOnFrameChange) {
+      this.update();
+    }
+  }
+
   public start() {
     const { activeScene } = this;
 
@@ -54,8 +61,7 @@ export class Simulation {
           target: Scene.ActionRequests.ActionEmission.ExecutionLevels.Broadcast,
         });
 
-        activeScene.update();
-        requestAnimationFrame(this.update.bind(this));
+        activeScene.start();
       }
     }
 
@@ -69,7 +75,6 @@ export class Simulation {
     }
 
     Engine['contextSimulation'] = this;
-    // this.lastUpdateTime = performance.now();
 
     for (let update = 0; update < this.interimUpdateQuantity; update++) {
       Input.emitStaged(this);
@@ -77,12 +82,7 @@ export class Simulation {
       this.scene.update();
     }
 
-    this.lastUpdateTime = performance.now();
     Engine['contextSimulation'] = null;
-    
-    if (this.updateOnFrameChange) {
-      requestAnimationFrame(this.update.bind(this));
-    }
   }
   
   public stop() {

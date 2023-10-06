@@ -52,6 +52,7 @@ export class SimulationInspectorRenderingPipeline extends SimulationRenderingPip
     const falcumRenderingPosition = this.optic.scenePosition.multiply(this.optic.scaledPixelsPerUnit());
 
     context.save();
+
     context.globalAlpha = .75;
 
     // x line
@@ -346,6 +347,18 @@ export class SimulationInspectorRenderingPipeline extends SimulationRenderingPip
     context.restore();
   }
 
+  public renderRawText(text: string, size = 1, color = Color.black) {
+    const { context } = this;
+    context.save();
+    const renderingPosition = Vector.down.multiply(size, this.optic.pixelsPerUnit, Vector.reverseY);
+    const textSize = this.optic.pixelsPerUnit * size;
+    context.translate(...renderingPosition.raw);
+    context.fillStyle = color.toString();
+    context.font = `${textSize}px Arial`;
+    context.fillText(text, 0, 0);
+    context.restore();
+  }
+
   public renderEntityName(entity: Entity) {
     const { context } = this;
     const entityPureTransform = entity.transform.toPureTransform();
@@ -357,6 +370,16 @@ export class SimulationInspectorRenderingPipeline extends SimulationRenderingPip
     context.fillStyle = 'red';
     context.translate(...renderingPosition.raw);
     context.fillText(entity.name, ...margin.raw);
+    context.restore();
+  }
+
+  public renderFixedPerformanceBar(fps: number) {
+    const { context } = this;
+    context.save();
+    this.defineFixedShapePath(new Rectangle().withScale(1.2))
+    context.fillStyle = Color.black.withAlpha(0.8).toString();
+    context.fill();
+    this.renderRawText(Math.max(Math.min(fps, 99), 0).toFixed(0), .5, Color.green.withAlpha(0.8));
     context.restore();
   }
 }
