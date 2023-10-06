@@ -12,6 +12,7 @@ export interface Collider {
 }
 
 @Transformator.Register()
+@Component.Abstract()
 export class Collider extends Component implements Collider {
   public shape: Shape = new Rectangle();
   public behaviour = Collider.Behaviour.Dynamic;

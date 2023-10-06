@@ -5,7 +5,7 @@ import { SimulationRenderer } from "../renderers/simulation-renderer";
 import { Vector } from "../core/vector";
 import { SimulationRenderingPipeline } from "../rendering-pipelines/simulation-rendering-pipeline";
 import { MeshRenderer } from "./mesh-renderer";
-import { LightSource } from "./light";
+import { Light } from "./light";
 import { Layer } from "../core/layer";
 import { Gizmos } from "../core/gizmos";
 import { Rectangle } from "../shapes";
@@ -138,7 +138,7 @@ export class Camera extends Component {
   protected renderSceneLight(renderer: SimulationRenderer, renderingPipelineInstance: SimulationRenderingPipeline) {
     const { scene } = renderer.simulation;
 
-    for (const lightSource of scene.getComponentsOfType(LightSource)) {
+    for (const lightSource of scene.getComponentsOfType(Light)) {
       lightSource.render(renderingPipelineInstance);
     }
   }

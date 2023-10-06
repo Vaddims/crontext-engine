@@ -20,7 +20,7 @@ export class SimulationRenderingPipeline<T extends SimulationRenderer = Simulati
   constructor(renderer: T, optic: Optic) {
     super(renderer);
     this.context = renderer.context;
-    if (!this.context) console.log('hmm')
+    if (!this.context) console.log('No context in simulation rendering pipeline')
     this.optic = optic;
   }
 
@@ -216,12 +216,6 @@ export class SimulationRenderingPipeline<T extends SimulationRenderer = Simulati
     context.strokeStyle = color.toString();
     context.stroke();
     context.restore();
-
-    // for (let i = 0; i < shape.vertices.length; i++) {
-    //   const vertex = shape.vertices[i];
-    //   const nextVertex = i === shape.vertices.length - 1 ? shape.vertices[0] : shape.vertices[i + 1];
-    //   this.renderLine(vertex, nextVertex, color);
-    // }
   }
 }
 

@@ -329,6 +329,8 @@ export class SpatialPartition<T> {
       currentBranch = parentBranch;
     }
 
+    delete this.headBranch.branches[currentBranch.cluster.identifier];
+
     if (currentBranch.cluster.identifier !== this.headBranch.cluster.identifier) {
       return true;
     }
@@ -339,7 +341,11 @@ export class SpatialPartition<T> {
 
     let newHeadBranch = this.headBranch;
     let subBranches = Object.values(newHeadBranch.branches);
-    while (subBranches.length <= 1) {
+    while (subBranches.length === 0 || subBranches.length === 1) {
+      if (newHeadBranch.elements.size > 0) {
+        break;
+      }
+
       if (subBranches.length === 0) {
         this.headBranch = null;
         return true;
@@ -347,7 +353,7 @@ export class SpatialPartition<T> {
 
       newHeadBranch = subBranches[0];
       subBranches = Object.values(newHeadBranch.branches);
-    };
+    }
 
     this.headBranch = newHeadBranch;
     return true;

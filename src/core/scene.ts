@@ -29,6 +29,7 @@ export class Scene implements Iterable<Entity> {
   public recacheEntitySpatialPartition(entity: Entity) {
     const mr = [...entity.components].find(component => component.constructor.name === 'MeshRenderer') as MeshRenderer | undefined;
     if (mr) {
+      // console.log('found')
       this.recacheMeshRendererSpatialPartition(mr);
     }
   }
@@ -92,12 +93,7 @@ export class Scene implements Iterable<Entity> {
     )));
   }
 
-  public removeEntitySpatialPartion(entity: Entity) {
-    const meshRenderer = [...entity.components].find(component => component.constructor.name === 'MeshRenderer') as MeshRenderer;
-    if (!meshRenderer) {
-      return;
-    }
-
+  public removeEntitySpatialPartion(meshRenderer: MeshRenderer) {
     const entitySPCCache = meshRenderer.entity.establishCacheConnection<SpatialPartitionCluster[] | null>('spc');
     const cachedBoundClusters = entitySPCCache.get();
     const boundClusters = cachedBoundClusters ? [...cachedBoundClusters] : null;
@@ -354,8 +350,6 @@ export class Scene implements Iterable<Entity> {
       this.requestEntityDestruction(children);
     }
 
-    console.log(this);
-
     return true;
   }
 
@@ -376,19 +370,19 @@ export class Scene implements Iterable<Entity> {
     return componentInstance;
   }
 
-  private resolveComponentDestructionRequest(componentDestructionRequest: Scene.ActionRequests.ComponentDestruction) {
+  private resolveComponentDestructionRequest(componentDestructionRequest: Scene.ActionRequests.ComponentDestruction): Component | null {
     const { componentConstructor, entity } = componentDestructionRequest;
 
     const baseClassOfConstructor = Component.getBaseclassOf(componentConstructor)
     const componentInstance = entity.components['hoistingComponents'].get(baseClassOfConstructor);
     if (!componentInstance) {
-      return false;
+      return null;
     }
 
     this.componentInstances.delete(componentInstance);
     entity.components['hoistingComponents'].delete(baseClassOfConstructor);
     
-    return true;
+    return componentInstance;
   }
 
   private resolvePrimitiveActionRequest(actionRequest: Scene.ActionRequest) {
@@ -415,6 +409,11 @@ export class Scene implements Iterable<Entity> {
       
       case Types.EntityDestruction:
         resolution = this.resolveEntityDestructionRequest(actionRequest);
+
+        const mrInstance = [...actionRequest.entity.components].find(c => c.constructor.name === 'MeshRenderer');
+        if (mrInstance) {
+          this.removeEntitySpatialPartion(mrInstance as MeshRenderer);
+        }
         break;
 
       case Types.ComponentInstantiation:
@@ -422,7 +421,11 @@ export class Scene implements Iterable<Entity> {
         break;
 
       case Types.ComponentDestruction:
-        resolution = this.resolveComponentDestructionRequest(actionRequest);
+        resolution = this.resolveComponentDestructionRequest(actionRequest) as Component | null;
+
+        if (resolution?.constructor.name === 'MeshRenderer') {
+          this.removeEntitySpatialPartion(resolution as MeshRenderer);
+        }
         break;
     }
 
@@ -439,12 +442,6 @@ export class Scene implements Iterable<Entity> {
           break;
         }
         break;
-
-      case Types.EntityDestruction:
-      case Types.ComponentDestruction:
-        this.removeEntitySpatialPartion(actionRequest.entity);
-        break;
-
     }
 
     return resolution;

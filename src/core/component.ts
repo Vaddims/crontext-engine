@@ -59,6 +59,20 @@ export class Component {
     return getFunctionType(eventMethod) === FunctionType.Generator;
   }
 
+  private static abstractComponentConstructors = new Set<Constructor<Component>>();
+
+  public static Abstract() {
+    return (target: Constructor<Component>) => {
+      Component.abstractComponentConstructors.add(target);
+    }
+  }
+
+  public static getUsableComponentConstructors() {
+    const componentConstructors: Constructor<Component>[] = [...Transformator.getTransformatorsOfSuperConstructor(Component)];
+    const usableComponentConstructors = componentConstructors.filter(constructor => !Component.abstractComponentConstructors.has(constructor));
+    return usableComponentConstructors;
+  }
+
   static readonly onAwake = Symbol('ComponentOnAwake');
   static readonly onStart = Symbol('ComponentOnStart');
   static readonly onUpdate = Symbol('ComponentOnUpdate');

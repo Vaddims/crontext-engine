@@ -40,6 +40,8 @@ export class EntityTransform {
   }
 
   public set position(globalPosition: Vector) {
+    const initialCachedGlobalPosition = this.cachedGlobalPosition;
+
     this.cachedGlobalPosition = globalPosition;
     this.internalLocalPosition = this.calculateLocalPosition(globalPosition);
 
@@ -47,7 +49,9 @@ export class EntityTransform {
       entity.transform.cachedGlobalPosition = null;
     }
 
-    this.handleTransformationChange();
+    if (!initialCachedGlobalPosition || !initialCachedGlobalPosition.isEqual(this.cachedGlobalPosition)) {
+      this.handleTransformationChange();
+    }
   }
 
   public get localPosition() {
@@ -55,6 +59,8 @@ export class EntityTransform {
   }
 
   public set localPosition(localPosition: Vector) {
+    const initialCachedLocalPosition = this.internalLocalPosition;
+
     this.cachedGlobalPosition = null;
     this.internalLocalPosition = localPosition;
 
@@ -62,7 +68,9 @@ export class EntityTransform {
       entity.transform.cachedGlobalPosition = null;
     }
 
-    this.handleTransformationChange();
+    if (!initialCachedLocalPosition || !initialCachedLocalPosition.isEqual(this.internalLocalPosition)) {
+      this.handleTransformationChange();
+    }
   }
   
   private calculateGlobalPosition() {
@@ -101,6 +109,8 @@ export class EntityTransform {
   }
 
   public set scale(globalScale: Vector) {
+    const initialCachedScale = this.cachedGlobalScale;
+
     this.cachedGlobalScale = globalScale;
     this.internalLocalScale = this.calculateLocalScale(globalScale);
 
@@ -109,7 +119,9 @@ export class EntityTransform {
       entity.transform.cachedGlobalPosition = null;
     }
 
-    this.handleTransformationChange();
+    if (!initialCachedScale || !initialCachedScale.isEqual(this.cachedGlobalScale)) {
+      this.handleTransformationChange();
+    }
   }
 
   public get localScale() {
@@ -117,6 +129,7 @@ export class EntityTransform {
   }
 
   public set localScale(localScale: Vector) {
+    const initialCachedlocalScale = this.cachedGlobalScale;
     this.internalLocalScale = localScale;
     this.cachedGlobalScale = null;
 
@@ -125,7 +138,9 @@ export class EntityTransform {
       entity.transform.cachedGlobalPosition = null;
     }
 
-    this.handleTransformationChange();
+    if (!initialCachedlocalScale || !initialCachedlocalScale.isEqual(this.internalLocalScale)) {
+      this.handleTransformationChange();
+    }
   }
 
   public recache() {
@@ -163,6 +178,8 @@ export class EntityTransform {
   }
 
   public set rotation(rotation: number) {
+    const initialRotation = this.cachedGlobalRotation;
+
     this.cachedGlobalRotation = rotation;
     this.internalLocalRotation = this.calculateLocalRotation(rotation);
 
@@ -171,7 +188,9 @@ export class EntityTransform {
       entity.transform.cachedGlobalRotation = null;
     }
 
-    this.handleTransformationChange();
+    if (!initialRotation || initialRotation === this.cachedGlobalRotation) {
+      this.handleTransformationChange();
+    }
   }
 
   public get localRotation() {
@@ -179,12 +198,17 @@ export class EntityTransform {
   }
 
   public set localRotation(localRotation: number) {
+    const initialLocalRotation = this.internalLocalRotation;
     this.internalLocalRotation = localRotation;
     this.cachedGlobalRotation = null;
 
     for (const entity of this.entity.getFlattenChildren()) {
       entity.transform.cachedGlobalRotation = null;
       entity.transform.cachedGlobalPosition = null;
+    }
+
+    if (!initialLocalRotation || initialLocalRotation === this.internalLocalRotation) {
+      this.handleTransformationChange();
     }
   }
 

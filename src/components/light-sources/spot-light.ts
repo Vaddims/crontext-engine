@@ -6,7 +6,7 @@ import { SectorVisibilityPolygon } from "../../core/visibility-polygons/sector-v
 import { SimulationRenderer } from "../../renderers";
 import { SimulationRenderingPipeline } from "../../rendering-pipelines";
 import { Rectangle } from "../../shapes";
-import { LightSource } from "../light";
+import { Light } from "../light";
 
 interface RaycastCheckpoint {
   exposed: Vector,
@@ -15,7 +15,7 @@ interface RaycastCheckpoint {
 }
 
 @Transformator.Register()
-export class SpotLight extends LightSource {
+export class SpotLight extends Light {
   public range = 30;
   public angle = Math.PI / 4;
   public direction = Vector.right;

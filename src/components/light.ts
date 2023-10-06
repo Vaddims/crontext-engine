@@ -28,7 +28,7 @@ export interface CheckpointRaycastCreationOptions {
   readonly lightBoundsInterimVertices?: Vector[];
 }
 
-export interface LightSource {
+export interface Light {
   render(renderer: SimulationRenderingPipeline): void;
 }
 
@@ -52,7 +52,8 @@ class LightSourceSegmentShareMap extends Map {
 }
 
 @Transformator.Register()
-export class LightSource extends Component {
+@Component.Abstract()
+export class Light extends Component {
   public usePhysicalRendering = true; // Rendering with shadow casts
   public physicalRenderingDependence: ComponentConstructor<MeshRenderer> | ComponentConstructor<Collider> = MeshRenderer;
 
@@ -93,7 +94,7 @@ export class LightSource extends Component {
         lightBounds?.vertices.includes(checkpointVertex) ||
         lightBoundsInterimVertices?.includes(checkpointVertex)
       ) {
-        checkpointRaycasts.push(LightSource.createStableRaycastCheckpoint(checkpointVertex));
+        checkpointRaycasts.push(Light.createStableRaycastCheckpoint(checkpointVertex));
         continue;
       }
 
@@ -122,12 +123,12 @@ export class LightSource extends Component {
       const shapesOverlapEndpointRaycastCenter = openStackEscape.size > 0;
 
       if (shapesOverlapEndpointRaycastCenter) {
-        checkpointRaycasts.push(LightSource.createStableRaycastCheckpoint(checkpointVertex));
+        checkpointRaycasts.push(Light.createStableRaycastCheckpoint(checkpointVertex));
         continue;
       }
 
       const { intersectionPosition, segment } = endpointRayResolution;
-      const reflectiveRaycastCheckpoint = LightSource.createReflectiveRaycastCheckpoint(checkpointVertex, intersectionPosition, segment);
+      const reflectiveRaycastCheckpoint = Light.createReflectiveRaycastCheckpoint(checkpointVertex, intersectionPosition, segment);
       checkpointRaycasts.push(reflectiveRaycastCheckpoint);
     }
 

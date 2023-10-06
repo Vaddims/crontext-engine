@@ -17,7 +17,9 @@ export class PointGravity extends Gravity {
     const rigidbodies = scene.getComponentsOfType(Rigidbody);
     for (const rigidbody of rigidbodies) {
       if (rigidbody.entity === this.entity) {
-        throw new Error('Component Conflict: Gravity x Rigidbody (Forbidden match)')
+        this.destroy();
+        alert('Component Conflict: Gravity & Rigidbody. The rigidbody component will be destroyed')
+        return;
       }
 
       const normal = this.transform.position.subtract(rigidbody.transform.position).normalized;

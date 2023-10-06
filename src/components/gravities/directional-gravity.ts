@@ -18,7 +18,9 @@ export class DirectionalGravity extends Gravity {
     const rigidbodies = scene.getComponentsOfType(Rigidbody);
     for (const rigidbody of rigidbodies) {
       if (rigidbody.entity === this.entity) {
-        throw new Error('Component Conflict: Gravity x Rigidbody (Forbidden match)')
+        this.destroy();
+        alert('Component Conflict: Gravity & Rigidbody. The gravity component will be destroyed')
+        return;
       }
 
       if (rigidbody.entity.name === 'Player') {

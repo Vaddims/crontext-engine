@@ -5,11 +5,11 @@ import { VisibilityPolygon } from "../../core/visibility-polygon";
 import { PanoramaVisibilityPolygon } from "../../core/visibility-polygons/panorama-visibility-polygon";
 import { SimulationRenderingPipeline } from "../../rendering-pipelines";
 import { Rectangle } from "../../shapes";
-import { LightSource } from "../light";
+import { Light } from "../light";
 import { rotatedOffsetPosition } from "../../utils";
 
 @Transformator.Register()
-export class PointLight extends LightSource {
+export class PointLight extends Light {
   public renderLight = true;
   public renderReflections = true;
   public renderBloomOverflows = true;
@@ -26,6 +26,10 @@ export class PointLight extends LightSource {
 
   @Transformator.Exclude()
   public visibilityPolygonCache: VisibilityPolygon | null = null;
+
+  constructor(entity: Entity) {
+    super(entity)
+  }
 
   start() {
 

@@ -7,7 +7,7 @@ export class Time {
       throw new Error('Out of engine simulation context');
     }
 
-    return 17;
+    return Engine.fps / 1000;
     // return (Time.getDeltaTimeMiliseconds(context['lastUpdateTime']) / 1000) / context.interimUpdateQuantity;
   }
 
