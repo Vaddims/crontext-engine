@@ -4,6 +4,7 @@ import { VisibilityPolygon } from "../core/visibility-polygon";
 import { SimulationRenderingPipeline } from "../rendering-pipelines";
 import { Collider } from "./collider";
 import { MeshRenderer } from "./mesh-renderer";
+import BuildinComponent from "../core/buildin-component";
 
 export interface StableCheckpointRaycast {
   readonly exposed: Vector;
@@ -53,7 +54,7 @@ class LightSourceSegmentShareMap extends Map {
 
 @Transformator.Register()
 @Component.Abstract()
-export class Light extends Component {
+export class Light extends BuildinComponent {
   public usePhysicalRendering = true; // Rendering with shadow casts
   public physicalRenderingDependence: ComponentConstructor<MeshRenderer> | ComponentConstructor<Collider> = MeshRenderer;
 

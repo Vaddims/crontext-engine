@@ -1,5 +1,5 @@
 import { Transformator } from "objectra";
-import { Color, Component, Shape, Transform, Vector } from "../../core";
+import { Color, Component, EntityTransform, Shape, Transform, Vector } from "../../core";
 import { Collision } from "../../core/collision";
 import { Gizmos } from "../../core/gizmos";
 import { Rectangle } from "../../shapes";
@@ -17,8 +17,15 @@ export class PolygonCollider extends Collider {
   }
 
   public relativeVerticesPosition() {
-    const transformedShape = this.shape.withTransform(Transform.setRotation(this.transform.rotation).setScale(this.transform.scale));
-    return transformedShape.vertices.map(vertex => vertex.add(this.transform.position))
+    const cache = this.entity.establishCacheConnection<readonly Vector[]>('pcrvp');
+    const value = cache.get();
+    if (value) {
+      return value;
+    }
+
+    const transformedShape = this.shape.withTransform(Transform.setRotation(this.transform.rotation).setScale(this.transform.scale).setPosition(this.transform.position));
+    cache.set(transformedShape.vertices);
+    return transformedShape.vertices;
   }
 
   public relativeShape() {
@@ -76,6 +83,11 @@ export class PolygonCollider extends Collider {
     }
 
 
+  }
+
+  [EntityTransform.onChange]() {
+    const cache = this.entity.establishCacheConnection<readonly Vector[]>('pcrvp');
+    cache.delete();
   }
 
   public [Component.onGizmosRender](gizmos: Gizmos) {

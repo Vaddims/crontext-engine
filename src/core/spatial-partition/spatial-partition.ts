@@ -329,6 +329,7 @@ export class SpatialPartition<T> {
       currentBranch = parentBranch;
     }
 
+
     delete this.headBranch.branches[currentBranch.cluster.identifier];
 
     if (currentBranch.cluster.identifier !== this.headBranch.cluster.identifier) {

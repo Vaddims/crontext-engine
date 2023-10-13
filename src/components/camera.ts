@@ -13,10 +13,11 @@ import { SpatialPartitionCluster } from "../core/spatial-partition/spatial-parti
 import { BoundingBox } from "../shapes/bounding-box";
 import { getBaseLog } from "../utils";
 import { Transformator } from "objectra";
+import BuildinComponent from "../core/buildin-component";
 
 // TODO NOT TO RENDER UNEEDED ENTITIES LIKE IN GIZMOS EXAMPLE
 @Transformator.Register()
-export class Camera extends Component {
+export class Camera extends BuildinComponent {
   public readonly layerMask: Layer[] = [Layer.camera];
   public canvasRelativePosition = Vector.zero;
   public canvasRelativeSize = Vector.one;

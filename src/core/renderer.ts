@@ -2,24 +2,44 @@ import { Simulation } from "../simulations";
 import { Optic } from "./optic";
 import { Vector } from "./vector";
 
+export interface Renderer {
+  defineListeners?(): () => void;
+}
+
 export abstract class Renderer {
+  public targetResolution: Vector | null = null; // null = auto scale / vector = resolution in pixels
+  public readonly canvas: HTMLCanvasElement;
   public readonly context: CanvasRenderingContext2D;
-  public scaleDependenceAxis: 'width' | 'height' = 'height';
+  public scaleDependenceAxis: 'width' | 'height' | 'pixel' = 'height';
   public unitFit = 10;
 
   public abstract readonly simulation: Simulation;
 
-  constructor(public readonly canvas: HTMLCanvasElement) {
-    const context = this.canvas.getContext('2d');
-    if (!context) {
-      throw new Error(`Could not get canvas context`);
-    }
+  constructor() {
+    const canvas = document.createElement('canvas');
 
-    this.context = context; 
+    this.canvas = canvas;
+    this.context = this.canvas.getContext('2d')!;
+
+    this.useListeners();
   }
 
   public abstract render(): void;
   public abstract updateTick(): void;
+
+  public resize(size: Vector) {
+    const { canvas } = this;
+    [canvas.width, canvas.height] = size.raw;
+    this.render()
+  }
+
+  public useListeners() {
+    const removeDefinedListeners = this.defineListeners?.();
+
+    return function removeListeners() {
+      removeDefinedListeners?.();
+    }
+  }
 
   public canvasPointToCoordinates(optic: Optic, screenPoint: Vector) {
     optic.pixelsPerUnit = this.pixelsPerUnit;
@@ -32,6 +52,10 @@ export abstract class Renderer {
   }
 
   public get pixelsPerUnit() {
+    if (this.scaleDependenceAxis === 'pixel') {
+      return this.unitFit;
+    }
+
     return this.canvas[this.scaleDependenceAxis] / this.unitFit;
   }
 

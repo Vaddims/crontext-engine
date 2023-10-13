@@ -4,6 +4,8 @@ import { Entity } from "./entity";
 import { Space } from "./space";
 import { Transform } from "./transform";
 import { Vector } from "./vector";
+import type { Component } from "./component";
+import { Scene } from "./scene";
 
 @Transformator.Register()
 export class EntityTransform {
@@ -27,7 +29,27 @@ export class EntityTransform {
   private internalLocalScale = Vector.one;
   private internalLocalRotation = 0;
 
+  public emit<T extends Component.ActionMethod<any, any, any, any>>(
+    actionSymbol: symbol
+  ) {
+    const { scene } = this.entity;
+    if (!scene) {
+      throw new Error();
+    }
+
+    return (...args: T extends Component.ActionMethod<infer A> ? A : []) => {
+      const requestArguments = args ?? [];
+      type ResultType = T extends Component.ActionMethod<any, infer U, any, any> ? U : never;
+      return scene.requestComponentActionEmission<typeof requestArguments, ResultType>(actionSymbol, {
+        args: requestArguments,
+        target: 1,
+        initiator: this,
+      });
+    }
+  }
+
   private handleTransformationChange() {
+    this.emit(EntityTransform.onChange)();
     this.entity.scene?.recacheEntitySpatialPartition(this.entity);
   }
 
@@ -296,4 +318,6 @@ export class EntityTransform {
     const transform = new Transform(this.localPosition, this.localScale, this.localRotation);
     return transform;
   }
+
+  public static readonly onChange = Symbol('ENTITYTRANFORM:ONCHANGE');
 }

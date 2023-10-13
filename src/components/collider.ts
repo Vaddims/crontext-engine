@@ -4,6 +4,7 @@ import { Collision } from "../core/collision";
 import { Gizmos } from "../core/gizmos";
 import { Rectangle } from "../shapes";
 import type { CircleCollider } from "./colliders/circle-collider";
+import BuildinComponent from "../core/buildin-component";
 
 export interface Collider {
   collisionDetection<T extends Collider>(collider: T): Collision<T> | null;
@@ -13,7 +14,7 @@ export interface Collider {
 
 @Transformator.Register()
 @Component.Abstract()
-export class Collider extends Component implements Collider {
+export class Collider extends BuildinComponent implements Collider {
   public shape: Shape = new Rectangle();
   public behaviour = Collider.Behaviour.Dynamic;
 
@@ -31,7 +32,7 @@ export class Collider extends Component implements Collider {
 
   public relativeVerticesPosition() {
     const transformedShape = this.shape.withTransform(Transform.setRotation(this.transform.rotation).setScale(this.transform.scale));
-    return transformedShape.vertices.map(vertex => vertex.add(this.transform.position))
+    return transformedShape.vertices.map(vertex => vertex.add(this.transform.position)) as readonly Vector[];
   }
 
   public relativeShape() {

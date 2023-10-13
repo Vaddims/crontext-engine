@@ -41,6 +41,7 @@ export class Simulation {
   }
 
   updateTick() {
+    this.scene['resolveActionRequests']();
     if (this.updateState === SimulationUpdateState.Frozen) {
       return;
     }

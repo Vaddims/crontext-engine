@@ -5,10 +5,9 @@ import { Simulation } from "../simulations/simulation";
 
 export class SimulationRenderer extends Renderer {
   public readonly simulation: Simulation;
-  constructor(canvas: HTMLCanvasElement) {
-    super(canvas);
+  constructor() {
+    super();
     this.simulation = new Simulation(this);
-    this.render();
     Engine['registeredRenderers'].add(this);
   }
 
@@ -30,13 +29,9 @@ export class SimulationRenderer extends Renderer {
     context.closePath();
     context.clip();
 
-    // const a = performance.now();
     for (const camera of scene.getComponentsOfType(Camera)) {
       camera.render(this);
     }
-    // const b = performance.now();
-    // const fps = 1000 / (b - a);
-    // console.log(b - a);
 
     context.restore();
   }

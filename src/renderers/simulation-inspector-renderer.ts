@@ -14,6 +14,7 @@ import { rotatedOffsetPosition } from "../utils";
 
 export class SimulationInspectorRenderer extends Renderer {
   public readonly inspector: SimulationInspector;
+  public renderFrame = true;
   public lastKnownMousePosition = Vector.zero;
   public mouseDown = false;
   public mouseMovedWhileClicked = false;
@@ -21,13 +22,12 @@ export class SimulationInspectorRenderer extends Renderer {
   public clickedTransformControls = false;
   public transformFace = Vector.one;
 
-  private displayFps = 0;
+  constructor(simulation: Simulation) {
+    super();
+    const { canvas } = this;
 
-  constructor(canvas: HTMLCanvasElement, simulation: Simulation) {
-    super(canvas);
     this.inspector = new SimulationInspector(this, simulation);
     Engine['registeredRenderers'].add(this);
-    // this.render();
 
     if (Object.prototype.hasOwnProperty.call(window, 'safari')) {
       canvas.addEventListener('gesturestart', this.gestureStartHandler.bind(this))
@@ -42,13 +42,7 @@ export class SimulationInspectorRenderer extends Renderer {
     canvas.addEventListener('mousemove', this.mousePositionHandler.bind(this));
     canvas.addEventListener('mousedown', this.mouseDownHandler.bind(this));
     canvas.addEventListener('mouseup', this.mouseUpHandler.bind(this));
-
     canvas.addEventListener('keydown', this.keypressHandler.bind(this));
-
-    // setInterval((() => {
-    //   this.displayFps = 0;
-    //   // console.log(this.simulation.fps)
-    // }).bind(this), 333);
   }
 
   public keypressHandler(event: KeyboardEvent) {
@@ -163,6 +157,10 @@ export class SimulationInspectorRenderer extends Renderer {
   }
   
   public render(): void {
+    if (!this.renderFrame) {
+      return
+    }
+
     const { context, canvasSize } = this;
     const { scene, renderer } = this.inspector.simulation;
 
@@ -194,17 +192,22 @@ export class SimulationInspectorRenderer extends Renderer {
     const bounds = this.getBounds(renderer);
     const boundingBoxViewportTraceMeshRenderers = scene.meshRendererSpatialPartition.getBoundingBoxHeightTraceElements(bounds);
 
-    const viewportMeshrenderers = new Set<MeshRenderer>();
+    const viewportMeshRenderers = new Set<MeshRenderer>();
     for (const meshRenderer of boundingBoxViewportTraceMeshRenderers) {
       if (!BoundingBox.boundsOverlap(bounds, new Shape(meshRenderer.relativeVerticesPosition()).bounds)) {
         continue;
       }
 
-      viewportMeshrenderers.add(meshRenderer);
+      viewportMeshRenderers.add(meshRenderer);
     }
 
-    for (const viewportMeshRenderer of viewportMeshrenderers) {
+    for (const viewportMeshRenderer of viewportMeshRenderers) {
       renderingPipeline.renderEntityMesh(viewportMeshRenderer);
+    }
+
+    for (const branch of scene.meshRendererSpatialPartition) {
+      const bounds = branch.cluster.getSpaceBounds();
+      gizmos.highlightVertices(bounds.vertices, new Color(0, 0, 255, 0.1));
     }
 
     for (const component of scene.getComponents()) {
@@ -229,9 +232,17 @@ export class SimulationInspectorRenderer extends Renderer {
       renderingPipeline.renderEntityTransformControls(this.inspector);
     }
     
+    // for (const meshRenderer of boundingBoxViewportTraceMeshRenderers) {
+    //   gizmos.highlightVertices(meshRenderer.relativeVerticesPosition(), Color.red);
+    // }
+
+    // for (const viewportMeshRenderer of viewportMeshRenderers) {
+    //   gizmos.highlightVertices(viewportMeshRenderer.relativeVerticesPosition(), Color.green);
+    // }
+
     context.restore();
 
-    renderingPipeline.renderFixedPerformanceBar(Engine.fps);
+    // renderingPipeline.renderFixedPerformanceBar(Engine.fps);
   }
 
   public get simulation() {

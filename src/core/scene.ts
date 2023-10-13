@@ -8,10 +8,11 @@ import { SpatialPartitionCluster } from "./spatial-partition/spatial-partition-c
 import { SpatialPartition } from "./spatial-partition/spatial-partition";
 import { getBaseLog } from "../utils";
 import { Constructor } from "objectra/dist/types/util.types";
+import { EntityTransform } from "./entity-transform";
 
 @Transformator.Register<Scene>()
 export class Scene implements Iterable<Entity> {
-  public name = 'Scene' + Math.random();
+  public name = 'Scene';
 
   private readonly hoistedEntities = new Set<Entity>();
   private readonly entityInstances = new Set<Entity>();
@@ -29,7 +30,6 @@ export class Scene implements Iterable<Entity> {
   public recacheEntitySpatialPartition(entity: Entity) {
     const mr = [...entity.components].find(component => component.constructor.name === 'MeshRenderer') as MeshRenderer | undefined;
     if (mr) {
-      // console.log('found')
       this.recacheMeshRendererSpatialPartition(mr);
     }
   }
@@ -81,7 +81,6 @@ export class Scene implements Iterable<Entity> {
       }
     }
 
-    // add new clusters
     const newBoundClusters = getBelongingClusters(meshRendererShape.bounds, clusterLevel);
 
     for (const boundCluster of newBoundClusters) {
@@ -406,14 +405,14 @@ export class Scene implements Iterable<Entity> {
       case Types.EntityTransformation:
         resolution = this.resolveEntityTransformationRequest(actionRequest);
         break;
-      
-      case Types.EntityDestruction:
-        resolution = this.resolveEntityDestructionRequest(actionRequest);
+        
+        case Types.EntityDestruction:
+          const mrInstance = [...actionRequest.entity.components].find(c => c.constructor.name === 'MeshRenderer');
+          if (mrInstance) {
+            this.removeEntitySpatialPartion(mrInstance as MeshRenderer);
+          }
 
-        const mrInstance = [...actionRequest.entity.components].find(c => c.constructor.name === 'MeshRenderer');
-        if (mrInstance) {
-          this.removeEntitySpatialPartion(mrInstance as MeshRenderer);
-        }
+          resolution = this.resolveEntityDestructionRequest(actionRequest);
         break;
 
       case Types.ComponentInstantiation:
@@ -421,11 +420,14 @@ export class Scene implements Iterable<Entity> {
         break;
 
       case Types.ComponentDestruction:
-        resolution = this.resolveComponentDestructionRequest(actionRequest) as Component | null;
-
-        if (resolution?.constructor.name === 'MeshRenderer') {
-          this.removeEntitySpatialPartion(resolution as MeshRenderer);
+        if (actionRequest.componentConstructor.name === 'MeshRenderer') {
+          const component = actionRequest.entity.components.get(actionRequest.componentConstructor);
+          if (component) {
+            this.removeEntitySpatialPartion(component as MeshRenderer);
+          }
         }
+
+        resolution = this.resolveComponentDestructionRequest(actionRequest) as Component | null;
         break;
     }
 
@@ -448,6 +450,10 @@ export class Scene implements Iterable<Entity> {
   }
 
   private resolveActionRequests() {
+    if (this.actionRequests.length === 0) {
+      return;
+    }
+
     type AnyGenerator = Component.ActionMethods.Sequential.Generator.Any;
     const self = this;
 
@@ -620,7 +626,6 @@ export class Scene implements Iterable<Entity> {
         return resolve(target);
       }
 
-      // console.log('now', actionEmissionRequest.symbol, self.getComponents(), self);
       switch (target) {
         case ExecutionLevels.Broadcast:
           return resolve(self.getComponents());
@@ -799,7 +804,7 @@ export namespace Scene {
     export interface ActionEmission<
       Args extends unknown[] = unknown[], _Return = unknown
     > extends ActionRequest.Base<ActionRequest.Types.ActionEmission> {
-      readonly initiator?: Component | undefined;
+      readonly initiator?: Component | EntityTransform | undefined;
       readonly symbol: symbol;
       readonly args: Args;
       readonly target?: ActionEmission.ExecutionLevels | Component[];
@@ -807,7 +812,7 @@ export namespace Scene {
 
     export namespace ActionEmission {
       export interface Options<Args extends unknown[] = unknown[], _Return = unknown> {
-        readonly initiator?: Component | undefined;
+        readonly initiator?: Component | EntityTransform | undefined;
         readonly args?: Args;
         readonly target?: ActionEmission.ExecutionLevels | Component[];
       }

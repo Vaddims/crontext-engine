@@ -1,9 +1,9 @@
 import { Transformator } from "objectra";
 import { FunctionType, getFunctionType } from "objectra/dist/utils";
 import { Collider } from "../components";
-import { Collision } from "./collision";
+import type { Collision } from "./collision";
 import { Entity } from "./entity";
-import { EntityTransform } from "./entity-transform";
+import type { EntityTransform } from "./entity-transform";
 import { Gizmos } from "./gizmos";
 import { Scene } from "./scene";
 import { Constructor } from "objectra/dist/types/util.types";
@@ -45,9 +45,9 @@ export class Component {
 
   public static getBaseclassOf(componentConstructor: ComponentConstructor) {
     let constructor = componentConstructor;
-    const getParentConstructor = (target: ComponentConstructor) => Object.getPrototypeOf(target.prototype).constructor;
-    while (getParentConstructor(constructor) !== Component) {
-      constructor = getParentConstructor(constructor);
+    const getSuperConstructor = (target: ComponentConstructor) => Object.getPrototypeOf(target.prototype).constructor;
+    while (![Component, ...Component.baseComponentConstructors].includes(getSuperConstructor(constructor))) {
+      constructor = getSuperConstructor(constructor);
     }
 
     return constructor;
@@ -60,6 +60,7 @@ export class Component {
   }
 
   private static abstractComponentConstructors = new Set<Constructor<Component>>();
+  private static baseComponentConstructors = new Set<Constructor>();
 
   public static Abstract() {
     return (target: Constructor<Component>) => {
@@ -67,10 +68,36 @@ export class Component {
     }
   }
 
+  public static Baseclass() {
+    return (target: Constructor<Component>) => {
+      Component.baseComponentConstructors.add(target);
+    }
+  }
+
   public static getUsableComponentConstructors() {
     const componentConstructors: Constructor<Component>[] = [...Transformator.getTransformatorsOfSuperConstructor(Component)];
     const usableComponentConstructors = componentConstructors.filter(constructor => !Component.abstractComponentConstructors.has(constructor));
     return usableComponentConstructors;
+  }
+
+  public static getComponentsWithType(componentConstructors?: Constructor<Component>[]) {
+    const usableComponentConstructors = componentConstructors ?? Component.getUsableComponentConstructors();
+    const buildins = [];
+    const customs = [];
+
+    for (const UsableComponentConstructor of usableComponentConstructors) {
+      const isBuildin = [...Transformator.getSuperTransformators(UsableComponentConstructor)].some(transformator => transformator.type.name === 'BuildinComponent');
+      if (isBuildin) {
+        buildins.push(UsableComponentConstructor);
+      } else {
+        customs.push(UsableComponentConstructor);
+      }
+    }
+
+    return {
+      buildins,
+      customs,
+    } as const;
   }
 
   static readonly onAwake = Symbol('ComponentOnAwake');

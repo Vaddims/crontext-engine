@@ -208,9 +208,6 @@ export class Vector {
   }
 
   public static lerp(a: Vector, b: Vector, t: number) {
-
-    // A + t * (B - A)
-    // return a.multiply(t).add(b.multiply(1 - t));
     return b.subtract(a).multiply(t).add(a);
   }
 

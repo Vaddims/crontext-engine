@@ -41,6 +41,10 @@ export class Entity {
 
       modify(newCacheCb: (cache: T | undefined) => T) {
         cache[key] = newCacheCb(cache[key]);
+      },
+
+      delete() {
+        delete cache[key];
       }
     }
   }

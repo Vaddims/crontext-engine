@@ -7,6 +7,7 @@ import { Collider } from "./collider";
 import { PlaneCollider } from "./colliders/plane-collider";
 import { rotatedOffsetPosition } from "../utils";
 import { Transformator } from "objectra";
+import BuildinComponent from "../core/buildin-component";
 
 type ColliderConstructor = new (entity: Entity) => Collider;
 type RigidbodyResolver<A extends Collider, B extends Collider> = 
@@ -14,7 +15,7 @@ type RigidbodyResolver<A extends Collider, B extends Collider> =
 type RigidbodyResolvers = [[ColliderConstructor, ColliderConstructor], RigidbodyResolver<any, any>][]; 
 
 @Transformator.Register()
-export class Rigidbody extends Component {
+export class Rigidbody extends BuildinComponent {
   private linearVelocity = Vector.zero;
   private rotationalVelocity = 0;
 
