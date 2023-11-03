@@ -1,21 +1,21 @@
 import { Transformator } from "objectra";
 import { clamp } from "../utils/crontext-math";
-import { staticValuePrebuilder } from "../utils/static-value-prebuilder";
+import { staticAccessorPrebuilder } from "../utils/static-value-prebuilder";
 
-const Prebuild = staticValuePrebuilder<Color>(color => color.duplicate());
+const Prebuild = staticAccessorPrebuilder<Color>(color => color.duplicate());
 
 @Transformator.Register()
 export class Color {
-  @Transformator.ArgumentPassthrough()
+  @Transformator.ConstructorArgument(0)
   public readonly red: number;
   
-  @Transformator.ArgumentPassthrough()
+  @Transformator.ConstructorArgument(1)
   public readonly green: number;
 
-  @Transformator.ArgumentPassthrough()
+  @Transformator.ConstructorArgument(2)
   public readonly blue: number;
 
-  @Transformator.ArgumentPassthrough()
+  @Transformator.ConstructorArgument(3)
   public readonly alpha: number;
 
   public constructor(red: number, green: number, blue: number, alpha = 1) {
@@ -100,14 +100,14 @@ export class Color {
     return color.withAlpha(0);
   }
 
-  @Prebuild public static readonly transparent = new Color(255, 255, 255, 0);
-  @Prebuild public static readonly white = new Color(255, 255, 255);
-  @Prebuild public static readonly black = new Color(0, 0, 0);
-  @Prebuild public static readonly yellow = new Color(255, 255, 0);
-  @Prebuild public static readonly orange = new Color(255, 125, 0);
-  @Prebuild public static readonly red = new Color(255, 0, 0);
-  @Prebuild public static readonly green = new Color(0, 255, 0);
-  @Prebuild public static readonly blue = new Color(0, 0, 255);
+  @Prebuild public static accessor transparent = new Color(255, 255, 255, 0);
+  @Prebuild public static accessor white = new Color(255, 255, 255);
+  @Prebuild public static accessor black = new Color(0, 0, 0);
+  @Prebuild public static accessor yellow = new Color(255, 255, 0);
+  @Prebuild public static accessor orange = new Color(255, 125, 0);
+  @Prebuild public static accessor red = new Color(255, 0, 0);
+  @Prebuild public static accessor green = new Color(0, 255, 0);
+  @Prebuild public static accessor blue = new Color(0, 0, 255);
 }
 
 

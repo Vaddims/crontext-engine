@@ -1,5 +1,5 @@
 {
-  "name": "crontext",
+  "name": "crontext-engine",
   "version": "0.0.0",
   "description": "",
   "main": "dist/index.js",

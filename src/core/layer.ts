@@ -2,7 +2,7 @@ import { Transformator } from "objectra";
 
 @Transformator.Register()
 export class Layer {
-  @Transformator.ArgumentPassthrough()
+  @Transformator.ConstructorArgument()
   public readonly name: string;
   constructor(name: string) {
     this.name = name;

@@ -12,7 +12,7 @@ import { Constructor } from "objectra/dist/types/util.types";
 export class Component {
   public readonly transform: EntityTransform;
 
-  @Transformator.ArgumentPassthrough()
+  @Transformator.ConstructorArgument()
   public readonly entity: Entity;
 
   constructor(entity: Entity) {
@@ -63,13 +63,13 @@ export class Component {
   private static baseComponentConstructors = new Set<Constructor>();
 
   public static Abstract() {
-    return (target: Constructor<Component>) => {
+    return (target: Constructor<Component>, context: ClassDecoratorContext) => {
       Component.abstractComponentConstructors.add(target);
     }
   }
 
   public static Baseclass() {
-    return (target: Constructor<Component>) => {
+    return (target: Constructor<Component>, context: ClassDecoratorContext) => {
       Component.baseComponentConstructors.add(target);
     }
   }

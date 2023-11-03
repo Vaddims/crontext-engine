@@ -12,7 +12,7 @@ import { Entity } from "../entity";
 export class EntityComponentSystem {
   private readonly hoistingComponents = new Map<ComponentConstructor, Component>();
 
-  @Transformator.ArgumentPassthrough()
+  @Transformator.ConstructorArgument()
   readonly entity: Entity;
 
   constructor(entity: Entity) {

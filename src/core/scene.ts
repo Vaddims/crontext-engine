@@ -185,6 +185,7 @@ export class Scene implements Iterable<Entity> {
       origin: entity,
     } as const;
 
+    // console.log(this);
     this.addActionRequest(entityInstantiationRequest);
     return entityInstantiationRequest;
   }

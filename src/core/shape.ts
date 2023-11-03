@@ -17,7 +17,7 @@ export namespace Shape {
 export class Shape {
   protected clockwiseInitialization = false;
   
-  @Transformator.ArgumentPassthrough()
+  @Transformator.ConstructorArgument()
   public readonly vertices: ReadonlyArray<Vector>;
   public readonly segmentVertexIndexes: ReadonlyArray<Shape.SegmentIndexes>;
   public readonly segments: ReadonlyArray<Shape.Segment>;

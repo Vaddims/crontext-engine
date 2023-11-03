@@ -9,7 +9,7 @@ import { Scene } from "./scene";
 
 @Transformator.Register()
 export class EntityTransform {
-  @Transformator.ArgumentPassthrough()
+  @Transformator.ConstructorArgument()
   public readonly entity: Entity;
   
   constructor(entity: Entity) {

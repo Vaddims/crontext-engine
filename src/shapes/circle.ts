@@ -3,7 +3,7 @@ import { Equilateral } from "./builders/equilateral";
 
 @Transformator.Register()
 export class Circle extends Equilateral {
-  @Transformator.ArgumentPassthrough()
+  @Transformator.ConstructorArgument()
   public readonly radius: number;
 
   public constructor(radius = .5) {

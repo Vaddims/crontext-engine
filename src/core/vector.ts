@@ -1,18 +1,18 @@
 import { Transformator } from "objectra";
-import { staticValuePrebuilder } from "../utils/static-value-prebuilder";
+import { staticAccessorPrebuilder } from "../utils/static-value-prebuilder";
 
 type RawVector = [number, number];
 type VectorOperationInput = RawVector | Vector | number;
 type VectorOperationCallback = (a: number, b: number) => number;
 
-const Prebuild = staticValuePrebuilder<Vector>(vector => vector.duplicate());
+const Prebuild = staticAccessorPrebuilder<Vector>(vector => vector.duplicate());
 
 @Transformator.Register()
 export class Vector {
-  @Transformator.ArgumentPassthrough()
+  @Transformator.ConstructorArgument(0)
   private 0: number;
   
-  @Transformator.ArgumentPassthrough()
+  @Transformator.ConstructorArgument(1)
   private 1: number;
 
   constructor(x: number, y: number) {
@@ -219,15 +219,15 @@ export class Vector {
     return new Vector(Math.random() * 2 - 1, Math.random() * 2 - 1);
   }
 
-	@Prebuild static readonly up = new Vector(0, 1);
-	@Prebuild static readonly right = new Vector(1, 0);
-	@Prebuild static readonly down = new Vector(0, -1);
-	@Prebuild static readonly left = new Vector(-1, 0);
-	@Prebuild static readonly one = new Vector(1, 1);
-	@Prebuild static readonly zero = new Vector(0, 0);
-  @Prebuild static readonly reverseX = new Vector(-1, 1);
-  @Prebuild static readonly reverseY = new Vector(1, -1);
-  @Prebuild static readonly reverse = new Vector(-1, -1);
-	@Prebuild static readonly safePositive = new Vector(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER);
-	@Prebuild static readonly safeNegative = new Vector(Number.MIN_SAFE_INTEGER, Number.MIN_SAFE_INTEGER);
+	@Prebuild static accessor up = new Vector(0, 1);
+	@Prebuild static accessor right = new Vector(1, 0);
+	@Prebuild static accessor down = new Vector(0, -1);
+	@Prebuild static accessor left = new Vector(-1, 0);
+	@Prebuild static accessor one = new Vector(1, 1);
+	@Prebuild static accessor zero = new Vector(0, 0);
+  @Prebuild static accessor reverseX = new Vector(-1, 1);
+  @Prebuild static accessor reverseY = new Vector(1, -1);
+  @Prebuild static accessor reverse = new Vector(-1, -1);
+	@Prebuild static accessor safePositive = new Vector(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER);
+	@Prebuild static accessor safeNegative = new Vector(Number.MIN_SAFE_INTEGER, Number.MIN_SAFE_INTEGER);
 }

@@ -9,7 +9,7 @@ import { Vector } from '../vector';
 export class SpatialPartition<T> {
   private headBranch: SpatialPartition.ClusterBranch<T> | null = null;
 
-  @Transformator.ArgumentPassthrough()
+  @Transformator.ConstructorArgument()
   public readonly clusterOpacity: number;
 
   constructor(clusterOpacity: number) {

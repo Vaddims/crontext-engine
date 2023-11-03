@@ -6,13 +6,13 @@ import { Vector } from "../vector";
 export class SpatialPartitionCluster {
   readonly identifier: string;
 
-  @Transformator.ArgumentPassthrough(0)
+  @Transformator.ConstructorArgument(0)
   readonly level: number;
   
-  @Transformator.ArgumentPassthrough(1)
+  @Transformator.ConstructorArgument(1)
   readonly clusterOpacity: number;
 
-  @Transformator.ArgumentPassthrough(2)
+  @Transformator.ConstructorArgument(2)
   readonly position: Vector;
 
   constructor(level: number, clusterOpacity: number, position: Vector) {
