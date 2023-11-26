@@ -200,7 +200,7 @@ export class EntityTransform {
   }
 
   public set rotation(rotation: number) {
-    const initialRotation = this.cachedGlobalRotation;
+    const initialCachedRotation = this.cachedGlobalRotation;
 
     this.cachedGlobalRotation = rotation;
     this.internalLocalRotation = this.calculateLocalRotation(rotation);
@@ -210,7 +210,7 @@ export class EntityTransform {
       entity.transform.cachedGlobalRotation = null;
     }
 
-    if (!initialRotation || initialRotation === this.cachedGlobalRotation) {
+    if (initialCachedRotation === null || initialCachedRotation !== rotation) {
       this.handleTransformationChange();
     }
   }

@@ -17,7 +17,7 @@ export function rotatedOffsetPosition(vector: Vector, rotation: number): Vector 
   return new Vector(x, y);
 }
 
-export function pointSegmentDistance(point: Vector, segment: Shape.Segment) {
+export function nearestPointOnSegment(point: Vector, segment: Shape.Segment) {
   const isolatedSegmentVector = segment[1].subtract(segment[0]);
   const isolatedSegmentStartToPoint = point.subtract(segment[0]);
 
@@ -25,20 +25,20 @@ export function pointSegmentDistance(point: Vector, segment: Shape.Segment) {
   const segmentToPointLenghtSquared = isolatedSegmentVector.lenghtSquared;
   const distance = projection / segmentToPointLenghtSquared;
 
-  let contactPoint: Vector;
+  let nearestPoint: Vector;
   if (distance <= 0) {
-    contactPoint = segment[0];
+    nearestPoint = segment[0];
   } else if (distance >= 1) {
-    contactPoint = segment[1];
+    nearestPoint = segment[1];
   } else {
-    contactPoint = segment[0].add(isolatedSegmentVector.multiply(distance));
+    nearestPoint = segment[0].add(isolatedSegmentVector.multiply(distance));
   }
 
-  const distanceSquared = Vector.distanceSquared(point, contactPoint);
+  const distanceSquared = Vector.distanceSquared(point, nearestPoint);
 
   return {
     distanceSquared,
-    contactPoint,
+    nearestPoint,
   }
 }
 
@@ -111,14 +111,14 @@ export function perpendicularProjection(shape: Shape, axis: Vector) {
   let max = -Infinity;
 
   for (const vertex of shape) {
-    const projected = axis.x * vertex.x + axis.y * vertex.y;
+    const projection = Vector.dot(vertex, axis);
 
-    if (projected < min) {
-      min = projected;
+    if (projection < min) {
+      min = projection;
     }
 
-    if (projected > max) {
-      max = projected;
+    if (projection > max) {
+      max = projection;
     }
   }
 

@@ -107,6 +107,7 @@ export class Component {
   static readonly onDestroy = Symbol('EntityOnDestroy');
   static readonly onGizmosRender = Symbol('GizmosOnRender');
   static readonly onCollision = Symbol('EntityOnCollision');
+  static readonly onCollisionUpdate = Symbol('EntityOnCollisionUpdate');
 }
 
 export type ComponentConstructor<T extends Component = Component> = new (entity: Entity) => T;

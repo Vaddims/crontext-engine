@@ -1,5 +1,5 @@
 import { Collider, Rigidbody } from "../components";
-import { pointSegmentDistance } from "../utils";
+import { nearestPointOnSegment } from "../utils";
 import { Entity } from "./entity";
 import { Shape } from "./shape";
 import { Vector } from "./vector";
@@ -13,9 +13,9 @@ export class Collision<T extends Collider = Collider> {
 
   constructor(options: Collision.InitOptions) {
     this.colliders = options.colliders;
-    const contact = Collision.findContactPoints(this.colliders[0].relativeShape(), this.colliders[1].relativeShape());
-    this.contacts = contact.contacts;
-    this.contactQuantity = contact.contactQuantity;
+    const contactResolution = Collision.findContactPoints(this.colliders[0].relativeShape(), this.colliders[1].relativeShape());
+    this.contacts = contactResolution.contacts;
+    this.contactQuantity = contactResolution.contactQuantity;
     this.normal = options.normal;
     this.depth = options.depth;
   }
@@ -28,31 +28,31 @@ export class Collision<T extends Collider = Collider> {
   }
 
   public static findContactPoints(...shapes: [Shape, Shape]) {
-    const contacts: Collision.Contacts = [Vector.zero];
+    const contacts: Collision.Contacts = [Vector.zero, Vector.zero];
     let contactQuantity = 0;
 
     let minDistanceSquared = Infinity;
     for (let i = 0; i < shapes.length; i++) {
       const shape = shapes[i];
-      const counterIndex = 1 - i;
+      const opponentShape = shapes[1 - i];
 
       for (const vertex of shape.vertices) {
-        for (const parallelShapeSegment of shapes[counterIndex].segments) {
+        for (const opponentShapeSegment of opponentShape.segments) {
           const { 
             distanceSquared, 
-            contactPoint 
-          } = pointSegmentDistance(vertex, parallelShapeSegment);
+            nearestPoint 
+          } = nearestPointOnSegment(vertex, opponentShapeSegment);
   
-          const bias = 0.0005;
+          const bias = 0.00000005;
           if (Math.abs(distanceSquared - minDistanceSquared) < bias) {
-            if (!contactPoint.isAlmostEqual(contacts[0], bias)) {
-              contacts[1] = contactPoint;
+            if (!nearestPoint.isAlmostEqual(contacts[0])) {
+              contacts[1] = nearestPoint;
               contactQuantity = 2;
             }
           } else if (distanceSquared < minDistanceSquared) {
             minDistanceSquared = distanceSquared;
             contactQuantity = 1;
-            contacts[0] = contactPoint;
+            contacts[0] = nearestPoint;
           }
         }
       }

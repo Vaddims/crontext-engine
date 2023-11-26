@@ -36,14 +36,36 @@ export class Engine {
     Engine.updateTick();
   }
 
+  private static deferedUpdateRenderers = new Map<Renderer, number>();
   public static updateTick() {
-    const a = performance.now();
+    // const a = performance.now();
+    
     for (const renderer of Engine.renderers) {
+      const deferedRendererInterval = Engine.deferedUpdateRenderers.get(renderer);
+      if (typeof deferedRendererInterval !== 'undefined') {
+        if (renderer.simulation.updateOnFrameChange) {
+          Engine.deferedUpdateRenderers.delete(renderer);
+          renderer.updateTick();
+        }
+
+        continue;
+      }
+
+      if (!renderer.simulation.updateOnFrameChange) {
+        const interval = setInterval(() => {
+          renderer.updateTick();
+        }, 1000 / renderer.simulation.updatesPerSecond);
+        Engine.deferedUpdateRenderers.set(renderer, interval);
+        continue;
+      }
+
       renderer.updateTick();
+      continue;
+      
     }
 
-    const b = performance.now();
-    Engine.fps = 1000 / (b - a);
+    // const b = performance.now();
+    // Engine.fps = 1000 / (b - a);
 
     requestAnimationFrame(Engine.updateTick);
   }

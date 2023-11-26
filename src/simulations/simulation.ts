@@ -7,13 +7,14 @@ import { Time } from "../core/time";
 export enum SimulationUpdateState {
   Active, // Request new updates as time goes on
   Passive, // Resolving the remaining updates without creating new update requests
-  Frozen, // All updates resolved
+  Frozen, // All updates resolved and stopped
 }
 
 export class Simulation {
   public interimUpdateQuantity = 1;
 
   public updateOnFrameChange = true;
+  public updatesPerSecond = 60;
   private loadedScene: Scene;
   private activeScene: Scene;
   private updateState = SimulationUpdateState.Frozen;
@@ -29,7 +30,7 @@ export class Simulation {
   }
 
   public loadScene(scene: Scene) {
-    this.stop();
+    // this.stop();
     this.loadedScene = Objectra.duplicate(scene);
     this.activeScene = Objectra.duplicate(this.loadedScene);
     return this.activeScene;
@@ -46,27 +47,28 @@ export class Simulation {
       return;
     }
 
-    if (this.updateOnFrameChange) {
-      this.update();
-    }
+    // if (this.updateOnFrameChange) {
+    //   this.update();
+    // }
+    this.update();
   }
 
   public start() {
     const { activeScene } = this;
 
-    if (this.updateOnFrameChange) {
-      const coldStart = this.updateState === SimulationUpdateState.Frozen;
-      this.updateState = SimulationUpdateState.Active;
-      if (coldStart) {
-        activeScene.requestComponentActionEmission(Component.onStart, {
-          target: Scene.ActionRequests.ActionEmission.ExecutionLevels.Broadcast,
-        });
+    Engine['contextSimulation'] = this;
 
-        activeScene.start();
-      }
+    const coldStart = this.updateState === SimulationUpdateState.Frozen;
+    this.updateState = SimulationUpdateState.Active;
+    if (coldStart) {
+      activeScene.requestComponentActionEmission(Component.onStart, {
+        target: Scene.ActionRequests.ActionEmission.ExecutionLevels.Broadcast,
+      });
+
+      activeScene.start();
     }
 
-    this.activeScene.recacheSpatialPartition();
+    Engine['contextSimulation'] = null;
   }
   
   public update() {
@@ -77,11 +79,10 @@ export class Simulation {
 
     Engine['contextSimulation'] = this;
 
-    for (let update = 0; update < this.interimUpdateQuantity; update++) {
-      Input.emitStaged(this);
-      this.scene.requestComponentActionEmission(Component.onUpdate);
-      this.scene.update();
-    }
+    Input.emitStaged(this);
+    this.scene.requestComponentActionEmission(Component.onUpdate)
+    this.scene.requestComponentActionEmission(Component.onCollisionUpdate);
+    this.scene.update();
 
     Engine['contextSimulation'] = null;
   }

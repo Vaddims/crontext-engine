@@ -1,9 +1,9 @@
 import { Transformator } from "objectra";
-import { Color, Component, EntityTransform, Shape, Transform, Vector } from "../../core";
+import { Color, Component, Entity, EntityTransform, Shape, Transform, Vector } from "../../core";
 import { Collision } from "../../core/collision";
 import { Gizmos } from "../../core/gizmos";
 import { Rectangle } from "../../shapes";
-import { lerp, pointSegmentDistance } from "../../utils";
+import { lerp, perpendicularProjection, nearestPointOnSegment, segmentWithSegmentIntersection } from "../../utils";
 import { Collider } from "../collider";
 import { Rigidbody } from "../rigidbody";
 
@@ -16,6 +16,11 @@ export class PolygonCollider extends Collider {
     return overlaps;
   }
 
+  private uncachedRelativeVerticesPosition() {
+    const transformedShape = this.shape.withTransform(Transform.setRotation(this.transform.rotation).setScale(this.transform.scale).setPosition(this.transform.position));
+    return transformedShape;
+  }
+
   public relativeVerticesPosition() {
     const cache = this.entity.establishCacheConnection<readonly Vector[]>('pcrvp');
     const value = cache.get();
@@ -23,17 +28,25 @@ export class PolygonCollider extends Collider {
       return value;
     }
 
-    const transformedShape = this.shape.withTransform(Transform.setRotation(this.transform.rotation).setScale(this.transform.scale).setPosition(this.transform.position));
+    const transformedShape = this.uncachedRelativeVerticesPosition();
     cache.set(transformedShape.vertices);
     return transformedShape.vertices;
   }
 
   public relativeShape() {
-    return new Shape(this.relativeVerticesPosition());
+    return this.uncachedRelativeVerticesPosition();
   }
 
   colls: Collision[] = [];
+  norm = Vector.zero;
+  depth = 0;
+
   public [Component.onUpdate]() {
+    // console.log('normal collider update')
+  }
+
+  public [Component.onCollisionUpdate]() {
+    // console.log('Special collider update and execute');
     const scene = this.entity.scene!;
     const collisions: Collision[] = [];
     for (const entity of scene.getEntities()) {
@@ -52,6 +65,8 @@ export class PolygonCollider extends Collider {
       }
 
       const correction = overlapResult.normal.multiply(overlapResult.depth);
+      this.norm = overlapResult.normal;
+      this.depth = overlapResult.depth;
 
       if (this.isStatic && collider.isStatic) {
         continue;
@@ -65,6 +80,9 @@ export class PolygonCollider extends Collider {
         collider.entity.transform.translate(correction);
       }
 
+      // const cache = this.entity.establishCacheConnection<readonly Vector[]>('pcrvp');
+      // cache.delete();
+
       const collision = new Collision({
         colliders: [this, collider],
         depth: overlapResult.depth,
@@ -73,16 +91,27 @@ export class PolygonCollider extends Collider {
 
       collisions.push(collision);
       this.colls = collisions;
-
-      // const rb = collider.entity.components.find(Rigidbody);
-      // this.entity.components.find(Rigidbody)?.resolveCollision(overlapResult.normal, rb ?? undefined);
     }
   
     for (const collision of collisions) {
-      this.entity.components.find(Rigidbody)?.resolveCollision(collision);
+      this.emit(Collider.onCollision)(collision);
+      (collision.colliders[1] as PolygonCollider).acceptCollisionFromExternalCollider(collision);
+    }
+  }
+
+  acceptCollisionFromExternalCollider(externalCollision: Collision) {
+    if (!externalCollision.colliders.includes(this)) {
+      console.warn('No this collider in external collision colliders');
+      return;
     }
 
+    const collision = new Collision({
+      colliders: (externalCollision.colliders[0] === this ? [...externalCollision.colliders] : [...externalCollision.colliders].reverse()) as Collision.Colliders,
+      depth: externalCollision.depth,
+      normal: externalCollision.normal.multiply(-1),
+    })
 
+    this.emit(Collider.onCollision)(collision);
   }
 
   [EntityTransform.onChange]() {
@@ -118,17 +147,15 @@ export class PolygonCollider extends Collider {
     }
 
     for (const collision of this.colls) {
-      gizmos.renderFixedDisk(collision.contacts[0], .1, Color.green);
-      gizmos.renderFixedCircle(collision.contacts[0], .1, Color.black);
-      if (collision.contacts[1]) {
-        gizmos.renderFixedDisk(collision.contacts[1], .1, Color.green);
-        gizmos.renderFixedCircle(collision.contacts[1], .1, Color.black);
+      gizmos.renderFixedDisk(collision.contacts[0], .2, Color.red);
+      gizmos.renderFixedCircle(collision.contacts[0], .2, Color.black);
+      if (collision.contactQuantity === 2) {
+        gizmos.renderFixedDisk(collision.contacts[1]!, .2, Color.red);
+        gizmos.renderFixedCircle(collision.contacts[1]!, .2, Color.black);
       }
     }
 
     this.colls = [];
-
-
   }
 }
 

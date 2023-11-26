@@ -19,9 +19,12 @@ export class Scene implements Iterable<Entity> {
 
   private readonly componentInstances = new Set<Component>();
   
+  @Transformator.Exclude()
   private readonly actionRequests: Scene.ActionRequest[] = [];
-  
+  @Transformator.Exclude()
   private readonly actionRequestResult = new WeakMap<Scene.ActionRequest, unknown>();
+  @Transformator.Exclude()
+  private readonly actionRequestResultCallbacks = new WeakMap<Scene.ActionRequest, Function[]>();
 
   @Transformator.Exclude()
   public readonly meshRendererSpatialPartition = new SpatialPartition<MeshRenderer>(3);
@@ -185,7 +188,6 @@ export class Scene implements Iterable<Entity> {
       origin: entity,
     } as const;
 
-    // console.log(this);
     this.addActionRequest(entityInstantiationRequest);
     return entityInstantiationRequest;
   }
@@ -220,12 +222,23 @@ export class Scene implements Iterable<Entity> {
       initiator,
     } = options ?? {};
 
+    const scene = this;
     const actionEmissionRequest: Scene.ActionRequests.ActionEmission<Args, Return> = {
       type: Scene.ActionRequest.Types.ActionEmission,
       symbol,
       args: args as any,
       target,
       initiator,
+      onResolution: function (cb) {
+        const arr = scene.actionRequestResultCallbacks.get(this);
+        if (!arr) {
+          scene.actionRequestResultCallbacks.set(this, [cb]);
+        } else {
+          arr.push(cb);
+        }
+
+        return this;
+      }
     };
 
     this.addActionRequest(actionEmissionRequest);
@@ -481,7 +494,7 @@ export class Scene implements Iterable<Entity> {
       // Update all existing action requests
       // Use array.from to prevent the loop from behaving unexpectly because of `currentGeneratorExecutions` mutations
 
-      for (const executionGenerator of currentGeneratorExecutions) {
+      for (const executionGenerator of Array.from(currentGeneratorExecutions)) {
         // resolveGeneratorIteration(executionGenerator);
         const result = resolveGeneratorIteration(executionGenerator);
 
@@ -665,6 +678,13 @@ export class Scene implements Iterable<Entity> {
           };
 
           pushElementToMapValue(actionRequestResponses, emissionRequest, response);
+
+          // const cbs = self.actionRequestResultCallbacks.get(emissionRequest);
+          // if (cbs) {
+          //   for (const cb of cbs) {
+          //     cb();
+          //   }
+          // }
           continue;
         }
 
@@ -809,6 +829,7 @@ export namespace Scene {
       readonly symbol: symbol;
       readonly args: Args;
       readonly target?: ActionEmission.ExecutionLevels | Component[];
+      readonly onResolution: (cb: () => void) => this;
     }
 
     export namespace ActionEmission {

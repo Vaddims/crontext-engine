@@ -89,6 +89,14 @@ export class Vector {
     return this.performOperation(operationInputs, (a, b) => a + b);
 	}
 
+  public perpendicular() {
+    return new Vector(-this.y, this.x);
+  }
+
+  public cross(vector: Vector) {
+    return this.x * vector.y - this.y * vector.x;
+  }
+
 	public subtract(...operationInputs: VectorOperationInput[]) {
     return this.performOperation(operationInputs, (a, b) => a - b);
 	}

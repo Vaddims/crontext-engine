@@ -165,7 +165,6 @@ export class Shape {
 
   public overlaps(target: Shape) {
     const shapes = [this, target];
-
     let normal = Vector.zero;
     let depth = Infinity;
 
@@ -176,8 +175,8 @@ export class Shape {
         const [minA, maxA] = perpendicularProjection(this, axis);
         const [minB, maxB] = perpendicularProjection(target, axis);
 
-        if (maxA < minB || maxB < minA) {
-          return null;
+        if (minA >= maxB || minB >= maxA) {
+          return false;
         }
 
         const axisDepth = Math.min(maxB - minA, maxA - minB);
@@ -191,10 +190,10 @@ export class Shape {
 
     const centerA = this.arithmeticMean()
     const centerB = target.arithmeticMean();
-    const direction = centerB.subtract(centerA);
+    const difference = centerB.subtract(centerA);
 
-    if (Vector.dot(direction, normal) < 0) {
-      normal = normal.multiply(Vector.reverse);
+    if (Vector.dot(difference, normal) < 0) {
+      normal = normal.multiply(-1);
     }
 
     return {
