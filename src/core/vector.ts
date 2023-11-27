@@ -125,6 +125,10 @@ export class Vector {
     return new Vector(Math.ceil(v.x), Math.ceil(v.y));
   }
 
+  static avarage(...vectors: Vector[]) {
+    return vectors.reduce((sum, vector) => sum.add(vector), Vector.zero).divide(vectors.length);
+  }
+
   public static projection(direction: Vector, secondary: Vector): Vector {
     const dotProduct = Vector.dot(direction, secondary);
     const magnitudeSquared = direction.lenghtSquared;

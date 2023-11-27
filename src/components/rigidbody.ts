@@ -2,38 +2,24 @@ import { Color, Component, Entity, EntityTransform, Renderer, Space, Time } from
 import { Collision } from "../core/collision";
 import { Gizmos } from "../core/gizmos";
 import { Vector } from "../core/vector";
-import { CircleCollider } from "./colliders/circle-collider";
 import { Collider } from "./collider";
-import { PlaneCollider } from "./colliders/plane-collider";
 import { rotatedOffsetPosition } from "../utils";
 import { Transformator } from "objectra";
 import BuildinComponent from "../core/buildin-component";
 
-type ColliderConstructor = new (entity: Entity) => Collider;
-type RigidbodyResolver<A extends Collider, B extends Collider> = 
-  (rigidbody: Rigidbody, rigidbodyCollider: A, collisionCollider: B) => void;
-type RigidbodyResolvers = [[ColliderConstructor, ColliderConstructor], RigidbodyResolver<any, any>][]; 
-
 @Transformator.Register()
 export class Rigidbody extends BuildinComponent {
   private linearVelocity = Vector.zero;
-  private rotationalVelocity = 0;
-
-  public inertia = 0;
-
-  public spatialFriction = .0;
+  private angularVelocity = 0;
 
   public mass = 1;
-  public area = 1;
-  public density = 0;
+  public inertia = 1;
   public restitution = 0;
   public staticFriction = 0.5;
   public dynamicFriction = 0.25;
+  public spatialFriction = .0;
 
   public gizmosRenderVelocity = true;
-  public gizmosRenderAcceeleration = true;
-
-  private readonly updateResolved: Rigidbody[] = [];
 
   public [Component.onStart]() {
     this.inertia = this.calculateRotationalInertia();
@@ -44,14 +30,10 @@ export class Rigidbody extends BuildinComponent {
     this.inertia = this.calculateRotationalInertia();
   }
 
-  frameResolvedWith = new Set<Entity>();
   public [Component.onUpdate]() {
-    this.frameResolvedWith.clear();
-    // this.updateResolved.length = 0;
-    // this.velocity = this.velocity.add(this.acceleration);
     this.linearVelocity = this.linearVelocity.multiply(Vector.one.subtract(this.spatialFriction))
     this.transform.translate(this.linearVelocity);
-    this.transform.rotate(this.rotationalVelocity)
+    this.transform.rotate(this.angularVelocity)
   }
 
   public [Component.onGizmosRender](gizmos: Gizmos) {
@@ -74,34 +56,26 @@ export class Rigidbody extends BuildinComponent {
     this.linearVelocity = this.linearVelocity.add(acceleration);
   }
 
-  public getInvertedMass() {
-    const collider = this.entity.components.findOfType(Collider);
-    if (collider?.behaviour === Collider.Behaviour.Static) {
-      return 0;
+  @Transformator.Exclude()
+  private cachedCollider: Collider | null | undefined;
+  private get collider() {
+    if (this.cachedCollider === void 0) {
+      return this.cachedCollider = this.entity.components.findOfType(Collider);
     }
 
-    return 1 / this.mass;
+    return this.cachedCollider;
   }
 
-  public getInvertedInertia() {
-    const collider = this.entity.components.findOfType(Collider);
-    if (collider?.behaviour === Collider.Behaviour.Static) {
-      return 0;
-    }
-
-    return 1 / this.inertia;
+  private get isStatic() {
+    return this.collider?.isStatic ?? false;
   }
 
-  public resolveXCollision(rigidbody: Rigidbody, normal: Vector) {
-    const relativeVelocity = rigidbody.linearVelocity.subtract(this.linearVelocity);
-    const restitution = Math.min(this.restitution, rigidbody.restitution)
+  public get invertedMass() {
+    return this.isStatic ? 0 : 1 / this.mass;
+  }
 
-    const impulseNorminator = -(1 + restitution) * Vector.dot(relativeVelocity, normal);
-    const impulseDivider = this.getInvertedMass() + rigidbody.getInvertedMass();
-    const impulse = impulseNorminator / impulseDivider;
-
-    this.linearVelocity = this.linearVelocity.subtract(normal.multiply(impulse / this.mass));
-    rigidbody.linearVelocity = rigidbody.linearVelocity.add(normal.multiply(impulse / rigidbody.mass));
+  public get invertedInertia() {
+    return this.isStatic ? 0 : 1 / this.inertia;
   }
 
   public calculateRotationalInertia() {
@@ -114,9 +88,9 @@ export class Rigidbody extends BuildinComponent {
     const opponentRigidbody = opponentEntity.components.find(Rigidbody);
 
     const restitution = Math.min(this.restitution, opponentRigidbody?.restitution ?? this.restitution);
-    const contactPoint = collision.contacts[1] ? collision.contacts[1].add(collision.contacts[0]).divide(2) : collision.contacts[0];
-    const staticFriction = (this.staticFriction + (opponentRigidbody?.staticFriction ?? this.staticFriction)) * .5;
-    const dynamicFriction = (this.dynamicFriction + (opponentRigidbody?.dynamicFriction ?? this.dynamicFriction)) * .5;
+    const contactPoint = collision.contacts[1] ? Vector.avarage(collision.contacts[0], collision.contacts[1]) : collision.contacts[0];
+    const staticFriction = opponentRigidbody ? Math.avarage(this.staticFriction, opponentRigidbody.staticFriction) : this.staticFriction;
+    const dynamicFriction = opponentRigidbody ? Math.avarage(this.dynamicFriction, opponentRigidbody.dynamicFriction) : this.dynamicFriction;
 
     // Resolution impulses calculation
     const selfRelativeContactPoint = contactPoint.subtract(this.transform.position);
@@ -125,8 +99,8 @@ export class Rigidbody extends BuildinComponent {
     const selfPerpendicularRelativeContactPoint = selfRelativeContactPoint.perpendicular();
     const opponentPerpendicularRelativeContactPoint = opponentRelativeContactPoint.perpendicular();
 
-    const selfAngularLinearVelocity = selfPerpendicularRelativeContactPoint.multiply(this.rotationalVelocity);
-    const opponentAngularLinearVelocity = opponentPerpendicularRelativeContactPoint.multiply(opponentRigidbody?.rotationalVelocity ?? 0);
+    const selfAngularLinearVelocity = selfPerpendicularRelativeContactPoint.multiply(this.angularVelocity);
+    const opponentAngularLinearVelocity = opponentPerpendicularRelativeContactPoint.multiply(opponentRigidbody?.angularVelocity ?? 0);
 
     const opponentComposedVelocity = opponentRigidbody ? opponentRigidbody.linearVelocity.add(opponentAngularLinearVelocity) : Vector.zero;
     const selfComposedVelocity = this.linearVelocity.add(selfAngularLinearVelocity);
@@ -141,11 +115,10 @@ export class Rigidbody extends BuildinComponent {
     const selfPerpendicularContactDotNormal = Vector.dot(selfPerpendicularRelativeContactPoint, collision.normal);
     const opponentPerpendicularContactDotNormal = Vector.dot(opponentPerpendicularRelativeContactPoint, collision.normal);
 
-
-    const selfInvertedMass = this.getInvertedMass();
-    const opponentInvertedMass = opponentRigidbody?.getInvertedMass() ?? 0;
-    const selfInvertedInertia = this.getInvertedInertia();
-    const opponentInvertedInertia = opponentRigidbody?.getInvertedInertia() ?? 0;
+    const selfInvertedMass = this.invertedMass;
+    const opponentInvertedMass = opponentRigidbody?.invertedMass ?? 0;
+    const selfInvertedInertia = this.invertedInertia;
+    const opponentInvertedInertia = opponentRigidbody?.invertedInertia ?? 0;
 
     const impulseDenominator = selfInvertedMass + opponentInvertedMass + 
     ((selfPerpendicularContactDotNormal ** 2) * selfInvertedInertia) + 
@@ -156,11 +129,11 @@ export class Rigidbody extends BuildinComponent {
 
     // Impulse applience
     this.linearVelocity = this.linearVelocity.add(impulse.multiply(-1).multiply(selfInvertedMass));
-    this.rotationalVelocity += -selfRelativeContactPoint.cross(impulse) * selfInvertedInertia;
+    this.angularVelocity += -selfRelativeContactPoint.cross(impulse) * selfInvertedInertia;
 
     if (opponentRigidbody) {
-      opponentRigidbody.linearVelocity = opponentRigidbody.linearVelocity.add(impulse.multiply(opponentRigidbody.getInvertedMass()));
-      opponentRigidbody.rotationalVelocity += opponentRelativeContactPoint.cross(impulse) * opponentInvertedInertia;
+      opponentRigidbody.linearVelocity = opponentRigidbody.linearVelocity.add(impulse.multiply(opponentInvertedMass));
+      opponentRigidbody.angularVelocity += opponentRelativeContactPoint.cross(impulse) * opponentInvertedInertia;
     }
 
     if (restitution > 0) {
@@ -193,11 +166,11 @@ export class Rigidbody extends BuildinComponent {
 
     // Friction impulse applience
     this.linearVelocity = this.linearVelocity.add(frictionImpulse.multiply(-1, selfInvertedMass));
-    this.rotationalVelocity += -selfRelativeContactPoint.cross(frictionImpulse) * selfInvertedInertia;
+    this.angularVelocity += -selfRelativeContactPoint.cross(frictionImpulse) * selfInvertedInertia;
 
     if (opponentRigidbody) {
-      opponentRigidbody.linearVelocity = opponentRigidbody.linearVelocity.add(frictionImpulse.multiply(opponentRigidbody.getInvertedMass()));
-      opponentRigidbody.rotationalVelocity += opponentRelativeContactPoint.cross(frictionImpulse) * opponentInvertedInertia;
+      opponentRigidbody.linearVelocity = opponentRigidbody.linearVelocity.add(frictionImpulse.multiply(opponentInvertedMass));
+      opponentRigidbody.angularVelocity += opponentRelativeContactPoint.cross(frictionImpulse) * opponentInvertedInertia;
     }
   }
 }
