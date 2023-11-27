@@ -149,7 +149,7 @@ export class PolygonCollider extends Collider {
     for (const collision of this.colls) {
       gizmos.renderFixedDisk(collision.contacts[0], .2, Color.red);
       gizmos.renderFixedCircle(collision.contacts[0], .2, Color.black);
-      if (collision.contactQuantity === 2) {
+      if (collision.contacts.length === 2) {
         gizmos.renderFixedDisk(collision.contacts[1]!, .2, Color.red);
         gizmos.renderFixedCircle(collision.contacts[1]!, .2, Color.black);
       }

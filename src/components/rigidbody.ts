@@ -27,6 +27,8 @@ export class Rigidbody extends BuildinComponent {
   public area = 1;
   public density = 0;
   public restitution = 0;
+  public staticFriction = 0.5;
+  public dynamicFriction = 0.25;
 
   public gizmosRenderVelocity = true;
   public gizmosRenderAcceeleration = true;
@@ -44,7 +46,6 @@ export class Rigidbody extends BuildinComponent {
 
   frameResolvedWith = new Set<Entity>();
   public [Component.onUpdate]() {
-    // console.log('Update rigidbody');
     this.frameResolvedWith.clear();
     // this.updateResolved.length = 0;
     // this.velocity = this.velocity.add(this.acceleration);
@@ -103,104 +104,100 @@ export class Rigidbody extends BuildinComponent {
     rigidbody.linearVelocity = rigidbody.linearVelocity.add(normal.multiply(impulse / rigidbody.mass));
   }
 
-  public resolveCollision_ARCHIVEDANDWORKING(collision: Collision) {
-    const {
-      normal,
-      colliders,
-    } = collision;
-
-    const externalCollision = colliders[1];
-    const externalRigidbody = externalCollision.entity.components.find(Rigidbody);
-
-
-    const relativeVelocity = (externalRigidbody?.linearVelocity ?? Vector.zero).subtract(this.linearVelocity);
-    const restitution = Math.min(this.restitution, (externalRigidbody?.restitution ?? this.restitution));
-
-    const impulseNorminator = -(1 + restitution) * Vector.dot(relativeVelocity, normal);
-    const impulseDivider = this.getInvertedMass() + (externalRigidbody?.getInvertedMass() ?? 0);
-    const impulse = impulseNorminator / impulseDivider;
-
-    if (externalRigidbody) {
-      externalRigidbody.linearVelocity = externalRigidbody.linearVelocity.add(normal.multiply(impulse / externalRigidbody.mass));
-    }
-
-    this.linearVelocity = this.linearVelocity.subtract(normal.multiply(impulse / this.mass));
-  }
-
   public calculateRotationalInertia() {
     // ONLY RECTS
     return (1 / 12) * this.mass * (this.transform.scale.x ** 2 + this.transform.scale.y ** 2);
   }
 
   public [Collider.onCollision](collision: Collision) {
-    const externalEntity = collision.colliders[1].entity;
-    const externalRigidbody = externalEntity.components.find(Rigidbody);
+    const opponentEntity = collision.colliders[1].entity;
+    const opponentRigidbody = opponentEntity.components.find(Rigidbody);
 
-    const restitution = Math.min(this.restitution, externalRigidbody?.restitution ?? this.restitution);
+    const restitution = Math.min(this.restitution, opponentRigidbody?.restitution ?? this.restitution);
+    const contactPoint = collision.contacts[1] ? collision.contacts[1].add(collision.contacts[0]).divide(2) : collision.contacts[0];
+    const staticFriction = (this.staticFriction + (opponentRigidbody?.staticFriction ?? this.staticFriction)) * .5;
+    const dynamicFriction = (this.dynamicFriction + (opponentRigidbody?.dynamicFriction ?? this.dynamicFriction)) * .5;
 
-    const impulses: Vector[] = [];
-    const raList = [];
-    const rbList = [];
+    // Resolution impulses calculation
+    const selfRelativeContactPoint = contactPoint.subtract(this.transform.position);
+    const opponentRelativeContactPoint = contactPoint.subtract(opponentEntity.transform.position);
 
-    for(let i = 0; i < collision.contactQuantity; i++) {
-      impulses[i] = Vector.zero;
-      raList[i] = Vector.zero;
-      rbList[i] = Vector.zero;
+    const selfPerpendicularRelativeContactPoint = selfRelativeContactPoint.perpendicular();
+    const opponentPerpendicularRelativeContactPoint = opponentRelativeContactPoint.perpendicular();
+
+    const selfAngularLinearVelocity = selfPerpendicularRelativeContactPoint.multiply(this.rotationalVelocity);
+    const opponentAngularLinearVelocity = opponentPerpendicularRelativeContactPoint.multiply(opponentRigidbody?.rotationalVelocity ?? 0);
+
+    const opponentComposedVelocity = opponentRigidbody ? opponentRigidbody.linearVelocity.add(opponentAngularLinearVelocity) : Vector.zero;
+    const selfComposedVelocity = this.linearVelocity.add(selfAngularLinearVelocity);
+    const relativeVelocity = opponentComposedVelocity.subtract(selfComposedVelocity);
+
+    const contactVelocityMagnitute = Vector.dot(relativeVelocity, collision.normal);
+
+    if (contactVelocityMagnitute > 0) {
+      return;
     }
 
-    for (let i = 0; i < collision.contactQuantity; i++) {
-      const contactPoint = collision.contacts[i]!;
+    const selfPerpendicularContactDotNormal = Vector.dot(selfPerpendicularRelativeContactPoint, collision.normal);
+    const opponentPerpendicularContactDotNormal = Vector.dot(opponentPerpendicularRelativeContactPoint, collision.normal);
 
-      const ra = contactPoint.subtract(this.transform.position);
-      const rb = contactPoint.subtract(externalEntity.transform.position);
 
-      raList[i] = ra;
-      rbList[i] = rb;
+    const selfInvertedMass = this.getInvertedMass();
+    const opponentInvertedMass = opponentRigidbody?.getInvertedMass() ?? 0;
+    const selfInvertedInertia = this.getInvertedInertia();
+    const opponentInvertedInertia = opponentRigidbody?.getInvertedInertia() ?? 0;
 
-      const raPerp = ra.perpendicular();
-      const rbPerp = rb.perpendicular();
+    const impulseDenominator = selfInvertedMass + opponentInvertedMass + 
+    ((selfPerpendicularContactDotNormal ** 2) * selfInvertedInertia) + 
+    ((opponentPerpendicularContactDotNormal ** 2) * opponentInvertedInertia);
 
-      const angularLinearVelocityA = raPerp.multiply(this.rotationalVelocity);
-      const angularLinearVelocityB = rbPerp.multiply(externalRigidbody?.rotationalVelocity ?? 0);
+    const impulseMagnitude = (-(1 + restitution) * contactVelocityMagnitute) / impulseDenominator;
+    const impulse = collision.normal.multiply(impulseMagnitude);
 
-      const externalRelativeVelocity = externalRigidbody ? externalRigidbody.linearVelocity.add(angularLinearVelocityB) : Vector.zero;
-      const currentRelativeVelocity = this.linearVelocity.add(angularLinearVelocityA);
-      const relativeVelocity = externalRelativeVelocity.subtract(currentRelativeVelocity);
+    // Impulse applience
+    this.linearVelocity = this.linearVelocity.add(impulse.multiply(-1).multiply(selfInvertedMass));
+    this.rotationalVelocity += -selfRelativeContactPoint.cross(impulse) * selfInvertedInertia;
 
-      const contactVelocityMagnitute = Vector.dot(relativeVelocity, collision.normal);
-
-      if (contactVelocityMagnitute > 0) {
-        continue;
-      }
-
-      const raPerpDotN = Vector.dot(raPerp, collision.normal);
-      const rbPerpDotN = Vector.dot(rbPerp, collision.normal);
-
-      const denom = this.getInvertedMass() + (externalRigidbody?.getInvertedMass() ?? 0) + 
-      (raPerpDotN ** 2) * this.getInvertedInertia() + 
-      (rbPerpDotN ** 2) * (externalRigidbody?.getInvertedInertia() ?? 0);
-
-      let j = -(1 + restitution) * contactVelocityMagnitute;
-      j /= denom;
-
-      const impulse = collision.normal.multiply(j);
-      impulses[i] = impulse;
+    if (opponentRigidbody) {
+      opponentRigidbody.linearVelocity = opponentRigidbody.linearVelocity.add(impulse.multiply(opponentRigidbody.getInvertedMass()));
+      opponentRigidbody.rotationalVelocity += opponentRelativeContactPoint.cross(impulse) * opponentInvertedInertia;
     }
 
-    for (let i = 0; i < collision.contactQuantity; i++) {
-      const impulse = impulses[i];
+    if (restitution > 0) {
+      return;
+    }
 
-      const ra = raList[i];
-      const rb = rbList[i];
+    // Friction
+    const relativeTangent = relativeVelocity.subtract(collision.normal.multiply(Vector.dot(relativeVelocity, collision.normal)))
+    if (relativeTangent.isAlmostEqual(Vector.zero)) {
+      return;
+    }
+    
+    const tangent = relativeTangent.normalized;
 
-      this.linearVelocity = this.linearVelocity.add(impulse.multiply(-1).multiply(this.getInvertedMass()));
-      this.rotationalVelocity += -ra.cross(impulse) * this.getInvertedInertia();
+    const selfPerpendicularContactDotTangent = Vector.dot(selfPerpendicularRelativeContactPoint, tangent);
+    const opponentPerpendicularContactDotTangent = Vector.dot(opponentPerpendicularRelativeContactPoint, tangent);
 
-      if (externalRigidbody) {
-        externalRigidbody.linearVelocity = externalRigidbody.linearVelocity.add(impulse.multiply(externalRigidbody.getInvertedMass()));
-        externalRigidbody.rotationalVelocity += rb.cross(impulse) * externalRigidbody.getInvertedInertia();
-      }
+    const frictionImpulseDenominator = selfInvertedMass + opponentInvertedMass + 
+    (selfPerpendicularContactDotTangent ** 2) * selfInvertedInertia + 
+    (opponentPerpendicularContactDotTangent ** 2) * opponentInvertedInertia;
+
+    const tangentialFrictionImpulse = Vector.dot(opponentPerpendicularRelativeContactPoint, tangent) / frictionImpulseDenominator;
+
+    let frictionImpulse: Vector;
+    if (Math.abs(tangentialFrictionImpulse) <= impulseMagnitude * staticFriction) {
+      frictionImpulse = tangent.multiply(tangentialFrictionImpulse);
+    } else {
+      frictionImpulse = tangent.multiply(-impulseMagnitude, dynamicFriction);
+    }
+
+    // Friction impulse applience
+    this.linearVelocity = this.linearVelocity.add(frictionImpulse.multiply(-1, selfInvertedMass));
+    this.rotationalVelocity += -selfRelativeContactPoint.cross(frictionImpulse) * selfInvertedInertia;
+
+    if (opponentRigidbody) {
+      opponentRigidbody.linearVelocity = opponentRigidbody.linearVelocity.add(frictionImpulse.multiply(opponentRigidbody.getInvertedMass()));
+      opponentRigidbody.rotationalVelocity += opponentRelativeContactPoint.cross(frictionImpulse) * opponentInvertedInertia;
     }
   }
-
 }

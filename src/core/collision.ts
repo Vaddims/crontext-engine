@@ -7,15 +7,12 @@ import { Vector } from "./vector";
 export class Collision<T extends Collider = Collider> {
   public readonly colliders: Collision.Colliders;
   public readonly contacts: Collision.Contacts;
-  public readonly contactQuantity: number;
   public readonly normal: Vector;
   public readonly depth: number;
 
   constructor(options: Collision.InitOptions) {
     this.colliders = options.colliders;
-    const contactResolution = Collision.findContactPoints(this.colliders[0].relativeShape(), this.colliders[1].relativeShape());
-    this.contacts = contactResolution.contacts;
-    this.contactQuantity = contactResolution.contactQuantity;
+    this.contacts = Collision.findContactPoints(this.colliders[0].relativeShape(), this.colliders[1].relativeShape());
     this.normal = options.normal;
     this.depth = options.depth;
   }
@@ -28,8 +25,7 @@ export class Collision<T extends Collider = Collider> {
   }
 
   public static findContactPoints(...shapes: [Shape, Shape]) {
-    const contacts: Collision.Contacts = [Vector.zero, Vector.zero];
-    let contactQuantity = 0;
+    const contacts: Collision.Contacts = [Vector.zero];
 
     let minDistanceSquared = Infinity;
     for (let i = 0; i < shapes.length; i++) {
@@ -43,25 +39,21 @@ export class Collision<T extends Collider = Collider> {
             nearestPoint 
           } = nearestPointOnSegment(vertex, opponentShapeSegment);
   
-          const bias = 0.00000005;
+          const bias = 1e-10;
           if (Math.abs(distanceSquared - minDistanceSquared) < bias) {
             if (!nearestPoint.isAlmostEqual(contacts[0])) {
               contacts[1] = nearestPoint;
-              contactQuantity = 2;
             }
           } else if (distanceSquared < minDistanceSquared) {
             minDistanceSquared = distanceSquared;
-            contactQuantity = 1;
             contacts[0] = nearestPoint;
+            contacts.length = 1;
           }
         }
       }
     }
 
-    return {
-      contacts,
-      contactQuantity,
-    };
+    return contacts;
   }
 } 
 
