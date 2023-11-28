@@ -4,31 +4,30 @@ import { Color } from "../core/color";
 import { Shape } from "../core/shape";
 import { Rectangle } from "../shapes/rectangle";
 import BuildinComponent from "../core/buildin-component";
+import { RestoreCacheOnUpdatePlugin } from "../core/systems/cache-plugins/restore-cache-update.capl";
+import { MemoizationOnSimulationUpdatePlugin } from "../core/systems/cache-plugins/memoization-simulation-update.capl";
+
+enum CacheKey {
+  RVP = 'relativeVerticesPosition',
+}
 
 @Transformator.Register()
 export class MeshRenderer extends BuildinComponent {
   public shape: Shape = new Rectangle();
   public color: Color = Color.black;
 
-  public relativeVerticesPosition() {
-    const cache = this.entity.establishCacheConnection<readonly Vector[]>('mrrvp');
-    const value = cache.get();
-    if (value) {
-      return value;
-    }
-
-    const transformedShape = this.shape.withTransform(Transform.setRotation(this.transform.rotation).setScale(this.transform.scale).setPosition(this.transform.position));
-    cache.set(transformedShape.vertices);
-    return transformedShape.vertices;
-  }
-
-  [Component.onUpdate]() {
-    const cache = this.entity.establishCacheConnection<readonly Vector[]>('mrrvp');
-    cache.delete();
+  [Component.onStart]() {
+    this.cacheManager.controller[CacheKey.RVP].setPlugin(new MemoizationOnSimulationUpdatePlugin(() => (
+      this.shape.withTransform(Transform.setRotation(this.transform.rotation).setScale(this.transform.scale).setPosition(this.transform.position))
+    )));
   }
 
   [EntityTransform.onChange]() {
-    const cache = this.entity.establishCacheConnection<readonly Vector[]>('mrrvp');
-    cache.delete();
+    delete this.cache[CacheKey.RVP];
+  }
+
+  public relativeVerticesPosition() {
+    const shape = (<Shape>this.cache[CacheKey.RVP]);
+    return shape.vertices;
   }
 }

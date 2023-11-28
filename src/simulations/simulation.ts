@@ -30,9 +30,14 @@ export class Simulation {
   }
 
   public loadScene(scene: Scene) {
-    // this.stop();
+    const initialState = this.updateState;
+    this.forceStop();
     this.loadedScene = Objectra.duplicate(scene);
     this.activeScene = Objectra.duplicate(this.loadedScene);
+    if (initialState === SimulationUpdateState.Active) {
+      this.start();
+    }
+
     return this.activeScene;
   }
 
@@ -63,9 +68,10 @@ export class Simulation {
     if (coldStart) {
       activeScene.requestComponentActionEmission(Component.onStart, {
         target: Scene.ActionRequests.ActionEmission.ExecutionLevels.Broadcast,
+      }).onResolution(() => {
+        console.log('finish')
+        activeScene.start();
       });
-
-      activeScene.start();
     }
 
     Engine['contextSimulation'] = null;
@@ -80,6 +86,7 @@ export class Simulation {
     Engine['contextSimulation'] = this;
 
     Input.emitStaged(this);
+    this.scene.requestComponentActionEmission(Component.onInternalUpdate);
     this.scene.requestComponentActionEmission(Component.onUpdate)
     this.scene.requestComponentActionEmission(Component.onCollisionUpdate);
     this.scene.update();
@@ -91,6 +98,10 @@ export class Simulation {
     if (this.updateState === SimulationUpdateState.Active) {
       this.updateState = SimulationUpdateState.Passive;
     }
+  }
+
+  public forceStop() {
+    this.updateState = SimulationUpdateState.Frozen;
   }
 
   public get isRunning() {

@@ -475,10 +475,22 @@ export class Scene implements Iterable<Entity> {
     const generatorParentMap = new Map<AnyGenerator, AnyGenerator>();
     const generatorEmissionRequest = new Map<AnyGenerator, Scene.ActionRequests.ActionEmission>();
     const generatorActionRequestHistoryMap = new Map<AnyGenerator, Scene.ActionRequest[]>();
+
+    const actionEmissionFinishQuantity = new Map<Scene.ActionRequests.ActionEmission, number>();
     
     const actionEmissionGeneratorMap = new Map<Scene.ActionRequests.ActionEmission, AnyGenerator[]>();
     const actionRequestResultMap = new Map<Scene.ActionRequest, any>(); // Results for each requested action request
-    const actionRequestResponses = new Map<Scene.ActionRequests.ActionEmission, Scene.ActionRequest.Emission.SegmentResponse[]>();
+    const actionEmissionResponses = new Map<Scene.ActionRequests.ActionEmission, Scene.ActionRequest.Emission.SegmentResponse[]>();
+
+    const addActionRequestResultSegment = (actionRequest: Scene.ActionRequests.ActionEmission, emissionExecutionResult: Scene.ActionRequest.Emission.SegmentResponse) => {
+      pushElementToMapValue(actionEmissionResponses, actionRequest, emissionExecutionResult);
+
+      const responses = actionEmissionResponses.get(actionRequest)!;
+      const awaitingResponses = actionEmissionFinishQuantity.get(actionRequest);
+      if (responses.length === awaitingResponses) {
+        actionRequestResultMap.set(actionRequest, responses)
+      }
+    }
 
     const currentGeneratorExecutions = new Set<AnyGenerator>(); // Executions that are currently resolving
 
@@ -510,6 +522,11 @@ export class Scene implements Iterable<Entity> {
 
     for (const [actionRequest, result] of actionRequestResultMap) {
       this.actionRequestResult.set(actionRequest, result);
+
+      if (actionRequest.type === Scene.ActionRequest.Types.ActionEmission) {
+        const arr = this.actionRequestResultCallbacks.get(actionRequest);
+        arr?.forEach(cb => cb());
+      }
     }
 
     // if (updateQuantity > 0) {
@@ -526,7 +543,7 @@ export class Scene implements Iterable<Entity> {
         if (actionRequestResultMap.has(lastActionRequest)) {
           responseArguments = actionRequestResultMap.get(lastActionRequest);
         } else if (lastActionRequest?.type === Scene.ActionRequest.Types.ActionEmission) {
-          const actionResponse = actionRequestResponses.get(lastActionRequest) ?? [];
+          const actionResponse = actionEmissionResponses.get(lastActionRequest) ?? [];
           responseArguments = [...actionResponse];
         }
       }
@@ -554,8 +571,7 @@ export class Scene implements Iterable<Entity> {
           method,
         };
 
-        pushElementToMapValue(actionRequestResponses, actionRequest, emissionExecutionResult);
-
+        addActionRequestResultSegment(actionRequest, emissionExecutionResult)
         currentGeneratorExecutions.delete(generator)
 
         if (!generatorParent) {
@@ -631,6 +647,8 @@ export class Scene implements Iterable<Entity> {
       } = actionEmissionRequest;
 
       const resolve = (receivers: Component[]) => {
+        actionEmissionFinishQuantity.set(actionEmissionRequest, receivers.length);
+
         return (receivers as Component.ImplicitActionMethodWrapper[])
           .map((component) => initializeComponentRequestMethod(actionEmissionRequest, component))
           .filter(Boolean) as Scene.ActionRequest.Emission.MethodInitialization[];
@@ -662,7 +680,7 @@ export class Scene implements Iterable<Entity> {
       }
     }
 
-    function resolveEmissionRequest(emissionRequest: Scene.ActionRequests.ActionEmission) {
+    function resolveActionEmissionStage(emissionRequest: Scene.ActionRequests.ActionEmission) {
       const methodInitializationResults = initializeEmissionRequest(emissionRequest);
 
       for (const methodInitializationResult of methodInitializationResults) {
@@ -670,6 +688,7 @@ export class Scene implements Iterable<Entity> {
           continue;
         }
 
+        // Primitive method
         if ('result' in methodInitializationResult) {
           const response: Scene.ActionRequest.Emission.SegmentResponse<any> = { 
             result: methodInitializationResult.result,
@@ -677,17 +696,11 @@ export class Scene implements Iterable<Entity> {
             method: methodInitializationResult.method,  
           };
 
-          pushElementToMapValue(actionRequestResponses, emissionRequest, response);
-
-          // const cbs = self.actionRequestResultCallbacks.get(emissionRequest);
-          // if (cbs) {
-          //   for (const cb of cbs) {
-          //     cb();
-          //   }
-          // }
+          addActionRequestResultSegment(emissionRequest, response)
           continue;
         }
 
+        // Complex method, should compute in next interim updates
         const { generator } = methodInitializationResult;
         generatorEmissionRequest.set(generator, emissionRequest);
         currentGeneratorExecutions.add(generator)
@@ -714,7 +727,7 @@ export class Scene implements Iterable<Entity> {
         self.actionRequests.length = 0;
   
         for (const emissionRequest of emissionRequests) {
-          resolveEmissionRequest(emissionRequest);
+          resolveActionEmissionStage(emissionRequest);
         }
 
         // Action request hopper like loop

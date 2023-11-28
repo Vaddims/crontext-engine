@@ -37,16 +37,7 @@ export class PolygonCollider extends Collider {
     return this.uncachedRelativeVerticesPosition();
   }
 
-  colls: Collision[] = [];
-  norm = Vector.zero;
-  depth = 0;
-
-  public [Component.onUpdate]() {
-    // console.log('normal collider update')
-  }
-
   public [Component.onCollisionUpdate]() {
-    // console.log('Special collider update and execute');
     const scene = this.entity.scene!;
     const collisions: Collision[] = [];
     for (const entity of scene.getEntities()) {
@@ -65,9 +56,6 @@ export class PolygonCollider extends Collider {
       }
 
       const correction = overlapResult.normal.multiply(overlapResult.depth);
-      this.norm = overlapResult.normal;
-      this.depth = overlapResult.depth;
-
       if (this.isStatic && collider.isStatic) {
         continue;
       } else if (this.isStatic) {
@@ -90,13 +78,14 @@ export class PolygonCollider extends Collider {
       });
 
       collisions.push(collision);
-      this.colls = collisions;
     }
   
     for (const collision of collisions) {
       this.emit(Collider.onCollision)(collision);
       (collision.colliders[1] as PolygonCollider).acceptCollisionFromExternalCollider(collision);
     }
+
+    this.cache.collisions = collisions;
   }
 
   acceptCollisionFromExternalCollider(externalCollision: Collision) {
@@ -146,20 +135,13 @@ export class PolygonCollider extends Collider {
       }
     }
 
-    for (const collision of this.colls) {
-      gizmos.renderFixedDisk(collision.contacts[0], .2, Color.red);
-      gizmos.renderFixedCircle(collision.contacts[0], .2, Color.black);
-      if (collision.contacts.length === 2) {
-        gizmos.renderFixedDisk(collision.contacts[1]!, .2, Color.red);
-        gizmos.renderFixedCircle(collision.contacts[1]!, .2, Color.black);
+    for (const collision of this.cache.collisions) {
+      gizmos.renderFixedDisk(collision.contacts[0], .1, Color.green);
+      gizmos.renderFixedCircle(collision.contacts[0], .1, Color.black);
+      if (collision.contacts[1]) {
+        gizmos.renderFixedDisk(collision.contacts[1], .1, Color.green);
+        gizmos.renderFixedCircle(collision.contacts[1], .1, Color.black);
       }
     }
-
-    this.colls = [];
   }
-}
-
-function getEdgeNormal(edgeStart: Vector, edgeEnd: Vector): Vector {
-  const edgeVector = { x: edgeEnd.x - edgeStart.x, y: edgeEnd.y - edgeStart.y };
-  return new Vector(-edgeVector.y, edgeVector.x);
 }

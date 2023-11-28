@@ -7,6 +7,10 @@ import type { EntityTransform } from "./entity-transform";
 import { Gizmos } from "./gizmos";
 import { Scene } from "./scene";
 import { Constructor } from "objectra/dist/types/util.types";
+import { CacheManager } from "./systems/cache-manager";
+import { SimulationCacheManager } from "./systems/cache-systems/simulation-cache-manager";
+
+const onInternalUpdate = Symbol('ComponentInternalUpdate');
 
 @Transformator.Register()
 export class Component {
@@ -15,13 +19,20 @@ export class Component {
   @Transformator.ConstructorArgument()
   public readonly entity: Entity;
 
+  @Transformator.Exclude()
+  protected readonly cacheManager = new SimulationCacheManager();
+
+  @Transformator.Exclude()
+  public readonly cache = this.cacheManager.cache;
+
   constructor(entity: Entity) {
     this.entity = entity;
     this.transform = entity.transform;
   }
 
   public emit<T extends Component.ActionMethod<any, any, any, any>>(
-    actionSymbol: symbol
+    actionSymbol: symbol,
+    options?: Component.Emit.Options,
   ) {
     const { scene } = this.entity;
     if (!scene) {
@@ -32,11 +43,16 @@ export class Component {
       const requestArguments = args ?? [];
       type ResultType = T extends Component.ActionMethod<any, infer U, any, any> ? U : never;
       return scene.requestComponentActionEmission<typeof requestArguments, ResultType>(actionSymbol, {
+        initiator: this,
         args: requestArguments,
         target: Scene.ActionRequests.ActionEmission.ExecutionLevels.EntityBroadcast,
-        initiator: this,
+        ...options,
       });
     }
+  }
+
+  public [onInternalUpdate]() {
+    this.cacheManager.performUpdateActions();
   }
 
   public destroy() {
@@ -100,6 +116,7 @@ export class Component {
     } as const;
   }
 
+  static readonly onInternalUpdate: typeof onInternalUpdate = onInternalUpdate;
   static readonly onAwake = Symbol('ComponentOnAwake');
   static readonly onStart = Symbol('ComponentOnStart');
   static readonly onUpdate = Symbol('ComponentOnUpdate');
@@ -145,6 +162,12 @@ export interface Component {
 }
 
 export namespace Component {
+  export namespace Emit {
+    export interface Options {
+      readonly target?: Scene.ActionRequests.ActionEmission.ExecutionLevels | Component[];
+    }
+  }
+
   export namespace ActionMethods {
     export type Instantaneous<Args extends unknown[] = unknown[], Return = unknown> = (...args: Args) => Return;
     export type Sequential<

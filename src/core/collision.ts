@@ -1,30 +1,42 @@
-import { Collider, Rigidbody } from "../components";
+import { Collider } from "../components";
 import { nearestPointOnSegment } from "../utils";
-import { Entity } from "./entity";
 import { Shape } from "./shape";
 import { Vector } from "./vector";
+import { MemoizationPlugin } from "./systems/cache-plugins/memoization-cache-plugin";
+import { CacheManager } from "./systems/cache-manager";
+
+type ShapeTuple = [Shape, Shape];
 
 export class Collision<T extends Collider = Collider> {
   public readonly colliders: Collision.Colliders;
-  public readonly contacts: Collision.Contacts;
   public readonly normal: Vector;
   public readonly depth: number;
+  private readonly cacheManager = new CacheManager();
 
   constructor(options: Collision.InitOptions) {
     this.colliders = options.colliders;
-    this.contacts = Collision.findContactPoints(this.colliders[0].relativeShape(), this.colliders[1].relativeShape());
     this.normal = options.normal;
     this.depth = options.depth;
+    this.configContactPointCache();
   }
 
-  getIndexedData(index: 0 | 1) {
+  private configContactPointCache() {
+    const calculateContactPoints = () => Collision.findContactPoints(...this.colliders.map(collider => collider.relativeShape()) as ShapeTuple);
+    this.cacheManager.controller.contactPoints.setPlugin(new MemoizationPlugin(calculateContactPoints));
+  }
+
+  get contacts() {
+    return this.cacheManager.cache.contactPoints;
+  }
+
+  public getIndexedData(index: 0 | 1) {
     return {
       collider: this.colliders[index],
       contacts: this.contacts,
     }
   }
 
-  public static findContactPoints(...shapes: [Shape, Shape]) {
+  public static findContactPoints(...shapes: ShapeTuple) {
     const contacts: Collision.Contacts = [Vector.zero];
 
     let minDistanceSquared = Infinity;
@@ -63,7 +75,7 @@ export namespace Collision {
 
   export interface InitOptions {
     readonly colliders: Collision.Colliders;
-    readonly normal: Vector,
+    readonly normal: Vector;
     readonly depth: number;
   }
 }
