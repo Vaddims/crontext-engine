@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import { EntityTransform } from "./entity-transform";
-import { Scene } from "./scene";
+import { Scene, Signal } from "./scene";
 import { EntityComponentSystem } from "./systems/entity-component-system";
 import { EntityLayerSystem } from "./systems/entity-layer-system";
 import { Transformator } from "objectra";
@@ -92,7 +92,11 @@ export class Entity {
       throw new Error('Cannot set parent to an uninstantiated entity');
     }
 
-    return this.parentScene.requestEntityTransformation(this, newParent);
+    return this.parentScene.useSignal<Signal.EntityTransformation>({
+      type: Signal.Type.EntityTransformation,
+      entity: this,
+      parent: newParent,
+    })
   }
 
   public destroy() {
@@ -100,6 +104,27 @@ export class Entity {
       throw new Error('Cannot destroy an uninstantiated entity');
     }
 
-    return this.parentScene.requestEntityDestruction(this);
+    return this.parentScene.useSignal<Signal.EntityDestruction>({
+      type: Signal.Type.EntityDestruction,
+      entity: this,
+    });
+  }
+
+  public instantiateComponent() {
+
+    // return this.useSignal<Signal.ComponentInstantiation>({
+    //   type: Signal.Type.ComponentInstantiation,
+      
+    // });
+
+  //   const componentInstantiationRequest: Signal.Creator<Signal.ComponentInstantiation<T>> = {
+  //     type: Signal.Type.ComponentInstantiation,
+  //     componentConstructor,
+  //     entity,
+  //   };
+
+  //   const signal = this.createFunctionalSignal(componentInstantiationRequest);
+  //   this.add(signal);
+  //   return signal;
   }
 }

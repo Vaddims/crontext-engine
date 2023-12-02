@@ -57,7 +57,7 @@ export class SimulationInspectorRenderer extends Renderer {
 
   public deleteAction() {
     this.inspector.selectedEntities.forEach((entity) => {
-      this.simulation.scene.instantResolve(this.simulation.scene.requestEntityDestruction(entity));
+      entity.destroy().resolve();
     });
 
 

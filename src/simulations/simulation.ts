@@ -37,10 +37,10 @@ export class Simulation {
     if (initialState === SimulationUpdateState.Active) {
       this.start();
     }
-
-    this.activeScene.requestComponentSignalEmission(Component.onAwake, {
+    
+    this.activeScene.emitSignal(Component.onAwake, {
       target: Signal.Emission.ExecutionLevel.Broadcast,
-    })
+    }).resolve();
 
     return this.activeScene;
   }
@@ -64,36 +64,34 @@ export class Simulation {
 
     Engine['contextSimulation'] = this;
 
-    activeScene.start();
-
-    // const coldStart = this.updateState === SimulationUpdateState.Frozen;
-    // this.updateState = SimulationUpdateState.Active;
-    // if (coldStart) {
-    //   activeScene.requestComponentActionEmission(Component.onStart, {
-    //     target: Scene.ActionRequests.ActionEmission.ExecutionLevels.Broadcast,
-    //   }).onResolution(() => {
-    //     activeScene.start();
-    //   });
-    // }
+    const coldStart = this.updateState === SimulationUpdateState.Frozen;
+    this.updateState = SimulationUpdateState.Active;
+    if (coldStart) {
+      activeScene.emitSignal(Component.onStart, {
+        target: Signal.Emission.ExecutionLevel.Broadcast,
+      }).resolve();
+      
+      activeScene.start();
+    }
 
     Engine['contextSimulation'] = null;
   }
   
   public update() {
-    // if (this.updateState !== SimulationUpdateState.Active) {
-    //   this.updateState = SimulationUpdateState.Frozen;
-    //   return;
-    // }
+    if (this.updateState !== SimulationUpdateState.Active) {
+      this.updateState = SimulationUpdateState.Frozen;
+      return;
+    }
 
-    // Engine['contextSimulation'] = this;
+    Engine['contextSimulation'] = this;
 
-    // Input.emitStaged(this);
-    // this.scene.requestComponentSignalEmission(Component.onInternalUpdate);
-    // this.scene.requestComponentSignalEmission(Component.onUpdate)
-    // this.scene.requestComponentSignalEmission(Component.onCollisionUpdate);
-    // this.scene.update();
+    Input.emitStaged(this);
+    this.scene.emitSignal(Component.onInternalUpdate);
+    this.scene.emitSignal(Component.onUpdate);
+    this.scene.emitSignal(Component.onCollisionUpdate);
+    this.scene.update();
 
-    // Engine['contextSimulation'] = null;
+    Engine['contextSimulation'] = null;
   }
   
   public stop() {

@@ -17,14 +17,9 @@ export class MeshRenderer extends BuildinComponent {
   public color: Color = Color.black;
 
   [Component.onAwake]() {
-    console.log('awake', new Error().stack);
     this.cacheManager.controller[CacheKey.RVP].setPlugin(new MemoizationOnSimulationUpdatePlugin(() => (
       this.shape.withTransform(Transform.setRotation(this.transform.rotation).setScale(this.transform.scale).setPosition(this.transform.position))
     )));
-  }
-
-  [Component.onStart]() {
-    console.log('start');
   }
 
   [EntityTransform.onChange]() {

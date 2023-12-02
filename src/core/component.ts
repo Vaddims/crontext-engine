@@ -42,7 +42,7 @@ export class Component {
     return (...args: T extends Component.ActionMethod<infer A> ? A : []) => {
       const requestArguments = args ?? [];
       type ResultType = T extends Component.ActionMethod<any, infer U, any, any> ? U : never;
-      return scene.requestComponentSignalEmission<typeof requestArguments, ResultType>(actionSymbol, {
+      return scene.emitSignal<typeof requestArguments, ResultType>(actionSymbol, {
         initiator: this,
         args: requestArguments,
         target: Signal.Emission.ExecutionLevel.EntityBroadcast,

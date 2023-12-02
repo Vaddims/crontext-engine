@@ -2,6 +2,7 @@ import { Transformator } from "objectra";
 import { Constructor } from "objectra/dist/types/util.types";
 import { Component, ComponentConstructor } from "../component";
 import { Entity } from "../entity";
+import { Signal } from "../scene";
 
 @Transformator.Register({
   // symbolIteratorEntryDepth: 1,
@@ -87,18 +88,12 @@ export class EntityComponentSystem {
       throw new Error('No scene')
     }
 
-    return scene.requestComponentInstantiation(componentConstructor, this.entity);
+    return this.entity.scene.useSignal<Signal.ComponentInstantiation>({
+      type: Signal.Type.ComponentInstantiation,
+      entity: this.entity,
+      componentConstructor,
+    });
   }
-
-  // public addInstance<T extends Component>(componentInstance: T) {
-  //   const baseConstructor = Component.getBaseclassOf(componentInstance.constructor as Constructor);
-  //   if (this.hasInstance(componentInstance)) {
-  //     throw new Error(`Component of class ${baseConstructor.name} already exists`);
-  //   }
-
-  //   this.components.set(baseConstructor, componentInstance);
-  //   return componentInstance;
-  // }
 
   public hasInstance<T extends Component>(instance: T) {
     for (const componentInstance of this.hoistingComponents.values()) {
@@ -116,7 +111,11 @@ export class EntityComponentSystem {
       throw new Error('No scene')
     }
 
-    return scene.requestComponentDestruction(componentConstructor, this.entity);
+    return scene.useSignal<Signal.ComponentDestruction>({
+      type: Signal.Type.ComponentDestruction,
+      entity: this.entity,
+      componentConstructor,
+    });
   }
 
   public destoryAll() {
@@ -125,8 +124,8 @@ export class EntityComponentSystem {
       throw new Error('No scene')
     }
 
-    for (const [ componentConstructor ] of this.hoistingComponents) {
-      scene.requestComponentDestruction(componentConstructor, this.entity);
+    for (const isntance of this.hoistingComponents.values()) {
+      isntance.destroy();
     }
   }
 }

@@ -10,24 +10,36 @@ import { getBaseLog } from "../utils";
 import { Constructor } from "objectra/dist/types/util.types";
 import { EntityTransform } from "./entity-transform";
 
+export namespace Signal {
+  export enum Type {
+    EntityInstantiation,
+    EntityDestruction,
+    EntityTransformation,
+    ComponentInstantiation,
+    ComponentDestruction,
+    SignalEmission,
+  }
+}
+
 @Transformator.Register<Scene>()
 export class Scene implements Iterable<Entity> {
   public name = 'Scene';
 
   private readonly hoistedEntities = new Set<Entity>();
   private readonly entityInstances = new Set<Entity>();
-
   private readonly componentInstances = new Set<Component>();
-  
-  @Transformator.Exclude()
-  private readonly signals: Signal[] = [];
-  @Transformator.Exclude()
-  private readonly signalResult = new WeakMap<Signal, unknown>();
-  @Transformator.Exclude()
-  private readonly signalResultCallbacks = new WeakMap<Signal, Function[]>();
 
   @Transformator.Exclude()
   public readonly meshRendererSpatialPartition = new SpatialPartition<MeshRenderer>(3);
+
+  @Transformator.Exclude()
+  private readonly signals: Signal[] = [];
+
+  @Transformator.Exclude()
+  private readonly signalResult = new WeakMap<Signal, unknown>();
+
+  @Transformator.Exclude()
+  private readonly signalResultCallbacks = new WeakMap<Signal, Function[]>();
 
   // TODO Add all edge cases
   public recacheEntitySpatialPartition(entity: Entity) {
@@ -112,7 +124,6 @@ export class Scene implements Iterable<Entity> {
   }
 
   public recacheSpatialPartition() {
-    console.log('recache spatial partion')
     const components = this.getComponents();
     const meshRenderers = components.filter(component => component.constructor.name === 'MeshRenderer') as MeshRenderer[];
     this.meshRendererSpatialPartition['headBranch'] = null;
@@ -179,288 +190,83 @@ export class Scene implements Iterable<Entity> {
     return targets;
   }
 
-  private addSignal(signal: Signal) {
-    this.signals.push(signal);
-
-  }
-  
-  public requestEntityInstantiation(entity?: Entity): Signal.EntityInstantiation {
-    const entityInstantiationRequest: any = {
+  public instantiateEntity(entity?: Entity) {
+    return this.useSignal<Signal.EntityInstantiation>({
       type: Signal.Type.EntityInstantiation,
       origin: entity,
-    } as const;
-
-    this.addSignal(entityInstantiationRequest);
-    return entityInstantiationRequest;
+    });
   }
 
-  public requestEntityTransformation(entity: Entity, parent?: Entity | null): Signal.EntityTransformation {
-    const entityTransformationRequest = {
-      type: Signal.Type.EntityTransformation,
-      entity,
-      parent,
-    } as const;
-
-    this.addSignal(entityTransformationRequest);
-    return entityTransformationRequest;
-  }
-
-  public requestEntityDestruction(entity: Entity): Signal.EntityDestruction {
-    const entityDestructionRequest = {
-      type: Signal.Type.EntityDestruction,
-      entity,
-    } as const;
-
-    this.addSignal(entityDestructionRequest);
-    return entityDestructionRequest;
-  }
-
-  public requestComponentSignalEmission<Args extends any[], Return>(
-   symbol: symbol, options?: Signal.SignalEmission.Options<Args, Return>
-  ): Signal.SignalEmission<Args, Return> {
+  public emitSignal<Args extends any[], Return>(symbol: symbol, options?: Signal.SignalEmission.Options<Args, Return>) {
     const {
       args = [],
       target = Signal.Emission.ExecutionLevel.Broadcast,
       initiator,
     } = options ?? {};
 
-    const scene = this;
-    const signalEmissionRequest: Signal.SignalEmission<Args, Return> = {
+    return this.useSignal<Signal.SignalEmission<Args, Return>>({
       type: Signal.Type.SignalEmission,
       symbol,
       args: args as any,
       target,
       initiator,
-      onResolution: function (cb) {
-        const arr = scene.signalResultCallbacks.get(this);
-        if (!arr) {
-          scene.signalResultCallbacks.set(this, [cb]);
-        } else {
-          arr.push(cb);
-        }
-
-        return this;
-      }
-    };
-
-    this.addSignal(signalEmissionRequest);
-    return signalEmissionRequest;
+    });
   }
 
-  public requestComponentInstantiation<T extends ComponentConstructor>(componentConstructor: T, entity: Entity) {
-    const componentInstantiationRequest: Signal.ComponentInstantiation<T> = {
-      type: Signal.Type.ComponentInstantiation,
-      componentConstructor,
-      entity,
-    };
-
-    this.addSignal(componentInstantiationRequest);
-    return componentInstantiationRequest;
+  public useSignal<const T extends Signal>(creationOptions: Signal.Creator<T>) {
+    const signal = this.createSignal(creationOptions);
+    const functionalSignal = this.createFunctionalSignal(signal);
+    this.addSignal(functionalSignal);
+    return functionalSignal as T;
   }
 
-  public requestComponentDestruction<T extends ComponentConstructor>(componentConstructor: T, entity: Entity) {
-    const componentDestructionRequest: Signal.ComponentDestruction<T> = {
-      type: Signal.Type.ComponentDestruction,
-      componentConstructor,
-      entity,
-    }
-    
-    this.addSignal(componentDestructionRequest)
-    return componentDestructionRequest;
+  public start() {
+    this.recacheSpatialPartition();
   }
 
-  public instantEntityInstantiation(entity: Entity): Entity | undefined {
-    const instantiationRequest = this.requestEntityInstantiation(entity);
-    this.update();
-    return this.signalResult.get(instantiationRequest) as any;
-  }
-
-  public instantResolve<T extends Signal>(signal: T) {
-    this.update();
-
-    if (!this.signalResult.has(signal)) {
-      throw new Error('No action request match for instant resolve');
-    }
-
-    return this.signalResult.get(signal) as Signal.Response<T>;
-  }
-
-  private resolveEntityInstantitationSignal(instantiationSignal: Signal.EntityInstantiation) {
-    const { origin } = instantiationSignal;
-    const entity = origin ? Objectra.duplicate(origin) : new Entity();
-    this.entityInstances.add(entity);
-    this.hoistedEntities.add(entity);
-    entity['parentScene'] = this;
-    return entity;
-  }
-
-  private resolveEntityTransformationSignal(transformationSignal: Signal.EntityTransformation) {
-    const { entity, parent: newParent = null } = transformationSignal;
-
-    if (entity.parent === newParent) {
-      return;
-    }
-
-    if (!this.entityInstances.has(entity)) {
-      throw new Error('Could not transfer an uninstantiated entity');
-    }
-
-    if (newParent && !this.entityInstances.has(newParent)) {
-      throw new Error('Could not transfer the entity to an uninstantiated parent');
-    }
-
-    if (entity === newParent) {
-      throw new Error('Could not transfer the entity to itself');
-    }
-
-    if (newParent) {
-      newParent['children'].add(entity);
-      if (entity.parent === null) {
-        this.hoistedEntities.delete(entity);
-      }
-    } else {
-      this.hoistedEntities.add(entity);
-    }
-
-    entity.parent?.['children'].delete(entity);
-
-    const pureEntityTransform = entity.transform.toPureTransform();
-
-    const previousParent = entity['parentEntity'];
-    entity['parentEntity'] = newParent;
-    if (newParent && !previousParent) {
-      entity.transform.calibrateLocals();
-    } else {
-      entity.transform.calibrateGlobals(pureEntityTransform);
-    }
-
-    return entity;
-  }
-
-  private resolveEntityDestructionSignal(destructionSignal: Signal.EntityDestruction) {
-    const { entity } = destructionSignal;
-
-    const entityExisted = this.entityInstances.delete(entity);
-    if (!entityExisted) {
-      return false;
-    }
-
-    if (!entity.parent) {
-      this.hoistedEntities.delete(entity);
-    }
-
-    for (const component of entity.components) {
-      this.componentInstances.delete(component);
-    }
-
-    entity.parent?.['children'].delete(entity);
-    entity['parentScene'] = null;
-    entity['parentEntity'] = null;
-
-    // for (const children of entity.getFlattenChildren()) {
-    //   this.entityInstances.delete(children);
-    // }
-
-    for (const children of entity.getChildren()) {
-      this.requestEntityDestruction(children);
-    }
-
-    return true;
-  }
-
-  private resolveComponentInstantiationSignal(componentInstantiationRequest: Signal.ComponentInstantiation) {
-    const { componentConstructor, entity } = componentInstantiationRequest;
-    const baseConstructor = Component.getBaseclassOf(componentConstructor);
-    if (entity.components.findOfType(baseConstructor)) {
-      throw new Error(`Component of class ${baseConstructor.name} already exists`);
-    }
-
-    const componentInstance = new componentConstructor(entity);
-    this.componentInstances.add(componentInstance);
-    entity.components['hoistingComponents'].set(baseConstructor, componentInstance);
-
-    return componentInstance;
-  }
-
-  private resolveComponentDestructionSignal(componentDestructionRequest: Signal.ComponentDestruction): Component | null {
-    const { componentConstructor, entity } = componentDestructionRequest;
-
-    const baseClassOfConstructor = Component.getBaseclassOf(componentConstructor)
-    const componentInstance = entity.components['hoistingComponents'].get(baseClassOfConstructor);
-    if (!componentInstance) {
-      return null;
-    }
-
-    this.componentInstances.delete(componentInstance);
-    entity.components['hoistingComponents'].delete(baseClassOfConstructor);
-    
-    return componentInstance;
+  public update() {
+    this.resolveSignals();
   }
 
   private resolvePrimitiveSignal(signal: Signal) {
-    const { Type } = Signal;
-    const { type } = signal;
+    const resolver = Scene.signalResolver.get(signal.type)!;
+    return resolver.call(this, signal);
+  }
 
-    type Resolution = ReturnType<
-      | typeof this.resolveEntityInstantitationSignal
-      | typeof this.resolveEntityTransformationSignal
-      | typeof this.resolveEntityDestructionSignal
-      | typeof this.resolveComponentInstantiationSignal
-      | typeof this.resolveComponentDestructionSignal
-    >
+  private createFunctionalSignal<T extends Signal.Base<any>>(signalCreator: Signal.Creator<T>): T {
+    const signal = signalCreator as unknown as T;
+    signal.resolve = () => {
+      const cachedSignals = [...this.signals];
+      const currentSignalIndex = cachedSignals.indexOf(signal);
+      if (currentSignalIndex === -1) {
+        throw new Error('Action request already resolved');
+      }
 
-    let resolution: Resolution;
+      cachedSignals.splice(currentSignalIndex, 1);
+      this.signals.length = 0;
+      this.signals.push(signal);
+      this.resolveSignals();
+      this.signals.push(...cachedSignals);
 
-    switch(type) {
-      case Type.EntityInstantiation:
-        resolution = this.resolveEntityInstantitationSignal(signal);
-        break;
-      
-      case Type.EntityTransformation:
-        resolution = this.resolveEntityTransformationSignal(signal);
-        break;
-        
-        case Type.EntityDestruction:
-          const mrInstance = [...signal.entity.components].find(c => c.constructor.name === 'MeshRenderer');
-          if (mrInstance) {
-            this.removeEntitySpatialPartion(mrInstance as MeshRenderer);
-          }
-
-          resolution = this.resolveEntityDestructionSignal(signal);
-        break;
-
-      case Type.ComponentInstantiation:
-        resolution = this.resolveComponentInstantiationSignal(signal);
-        break;
-
-      case Type.ComponentDestruction:
-        if (signal.componentConstructor.name === 'MeshRenderer') {
-          const component = signal.entity.components.get(signal.componentConstructor);
-          if (component) {
-            this.removeEntitySpatialPartion(component as MeshRenderer);
-          }
-        }
-
-        resolution = this.resolveComponentDestructionSignal(signal) as Component | null;
-        break;
+      if (!this.signalResult.has(signal)) {
+        throw new Error('internal');
+      }
+    
+      const res = this.signalResult.get(signal);
+      return res
     }
 
-    // switch(Signal.type) {
-    //   case Types.EntityInstantiation:
-    //   case Types.EntityTransformation:
-    //   case Types.ComponentInstantiation:
-    //     if (resolution instanceof Entity) {
-    //       this.recacheEntitySpatialPartition(resolution);
-    //     }
+    return signal;
+  }
 
-    //     if (resolution instanceof Component) {
-    //       this.recacheEntitySpatialPartition(resolution.entity);
-    //       break;
-    //     }
-    //     break;
-    // }
+  private createSignal<T extends Signal.Base<any>>(creationOptions: Signal.Creator<T>) {
+    const signalFoundation = { ...creationOptions };
+    const signal = this.createFunctionalSignal(signalFoundation);
+    return signal;
+  }
 
-    return resolution;
+  private addSignal(signal: Signal) {
+    this.signals.push(signal);
   }
 
   private resolveSignals() {
@@ -469,7 +275,7 @@ export class Scene implements Iterable<Entity> {
     }
 
     type AnyGenerator = Component.ActionMethods.Sequential.Generator.Any;
-    const self = this;
+    const scene = this;
 
     const generatorMethodComponentMap = new Map<AnyGenerator, [Component.ActionMethod.Any, Component]>();
     const generatorParentMap = new Map<AnyGenerator, AnyGenerator>();
@@ -482,13 +288,13 @@ export class Scene implements Iterable<Entity> {
     const signalResultMap = new Map<Signal, any>(); // Results for each requested action request
     const signalEmissionResponses = new Map<Signal.SignalEmission, Signal.Emission.SegmentResponse[]>();
 
-    const addSignalResultSegment = (Signal: Signal.SignalEmission, emissionExecutionResult: Signal.Emission.SegmentResponse) => {
-      pushElementToMapValue(signalEmissionResponses, Signal, emissionExecutionResult);
+    const addSignalResultSegment = (signal: Signal.SignalEmission, emissionExecutionResult: Signal.Emission.SegmentResponse) => {
+      pushElementToMapValue(signalEmissionResponses, signal, emissionExecutionResult);
 
-      const responses = signalEmissionResponses.get(Signal)!;
-      const awaitingResponses = signalEmissionFinishQuantity.get(Signal);
+      const responses = signalEmissionResponses.get(signal)!;
+      const awaitingResponses = signalEmissionFinishQuantity.get(signal);
       if (responses.length === awaitingResponses) {
-        signalResultMap.set(Signal, responses)
+        signalResultMap.set(signal, responses)
       }
     }
 
@@ -529,9 +335,10 @@ export class Scene implements Iterable<Entity> {
       }
     }
 
-    // if (updateQuantity > 0) {
-    //   this.recacheSpatialPartition();
-    // }
+    // TODO Remove from here
+    if (updateQuantity > 0) {
+      this.recacheSpatialPartition();
+    }
 
     function resolveGeneratorIteration(generator: AnyGenerator) {
       const generatorSignalHistory = generatorSignalHistoryMap.get(generator) ?? [];
@@ -617,10 +424,10 @@ export class Scene implements Iterable<Entity> {
     }
 
     function initializeComponentRequestMethod(
-      SignalEmissionRequest: Signal.SignalEmission, 
+      signalEmissionRequest: Signal.SignalEmission, 
       receiver: Component.ImplicitActionMethodWrapper
     ): Signal.Emission.MethodInitialization | void {
-      const { symbol, args } = SignalEmissionRequest;
+      const { symbol, args } = signalEmissionRequest;
       const eventMethod = receiver[symbol]?.bind(receiver);
       if (!eventMethod) {
         return;
@@ -633,25 +440,31 @@ export class Scene implements Iterable<Entity> {
   
       const generator = eventMethod(...args);
       generatorMethodComponentMap.set(generator, [eventMethod, receiver]);
-      pushElementToMapValue(signalEmissionGeneratorMap, SignalEmissionRequest, generator);
+      pushElementToMapValue(signalEmissionGeneratorMap, signalEmissionRequest, generator);
 
       return { method: eventMethod, generator, component: receiver };
     }
 
-    function initializeEmissionRequest(SignalEmissionRequest: Signal.SignalEmission) {
+    function initializeEmissionRequest(signal: Signal.SignalEmission) {
       const { ExecutionLevel } = Signal.Emission;
 
       const { 
         initiator,
         target = ExecutionLevel.EntityBroadcast,
-      } = SignalEmissionRequest;
+      } = signal;
 
       const resolve = (receivers: Component[]) => {
-        signalEmissionFinishQuantity.set(SignalEmissionRequest, receivers.length);
+        signalEmissionFinishQuantity.set(signal, receivers.length);
 
-        return (receivers as Component.ImplicitActionMethodWrapper[])
-          .map((component) => initializeComponentRequestMethod(SignalEmissionRequest, component))
+        const recieverResults = (receivers as Component.ImplicitActionMethodWrapper[])
+          .map((component) => initializeComponentRequestMethod(signal, component))
           .filter(Boolean) as Signal.Emission.MethodInitialization[];
+
+        if (recieverResults.length === 0) {
+          signalResultMap.set(signal, []);
+        }
+
+        return recieverResults;
       }
 
       if (Array.isArray(target)) {
@@ -660,7 +473,7 @@ export class Scene implements Iterable<Entity> {
 
       switch (target) {
         case ExecutionLevel.Broadcast:
-          return resolve(self.getComponents());
+          return resolve(scene.getComponents());
         
         case ExecutionLevel.EntityBroadcast:
           if (!initiator) {
@@ -711,7 +524,7 @@ export class Scene implements Iterable<Entity> {
       do {
         const emissionRequests: Signal.SignalEmission[] = [];
         // First resolve all primitive action requests
-        for (const signal of self.signals) {
+        for (const signal of scene.signals) {
           if (signal.type === Signal.Type.SignalEmission) {
             emissionRequests.push(signal);
             continue;
@@ -720,28 +533,137 @@ export class Scene implements Iterable<Entity> {
           // NO REQUESTS FROM PRIMITIVE ACTION REQUERSTS
           const result = signalResultMap.has(signal) 
             ? signalResultMap.get(signal) 
-            : self.resolvePrimitiveSignal(signal);
+            : scene.resolvePrimitiveSignal(signal);
 
           signalResultMap.set(signal, result);
         }
 
-        self.signals.length = 0;
+        scene.signals.length = 0;
   
         for (const emissionRequest of emissionRequests) {
           resolveSignalEmissionStage(emissionRequest);
         }
 
         // Action request hopper like loop
-      } while (self.signals.length > 0);
+      } while (scene.signals.length > 0);
     }
   }
 
-  public start() {
-    // this.recacheSpatialPartition();
-  }
+  private static readonly signalResolver = new Map<Signal.Type, (this: Scene, signal: Signal) => any>();
 
-  public update() {
-    this.resolveSignals();
+  static {
+    Scene.signalResolver.set(Signal.Type.EntityInstantiation, function(signal) {
+      const { origin } = signal as Signal.EntityInstantiation;
+      const entity = origin ? Objectra.duplicate(origin) : new Entity();
+      this.entityInstances.add(entity);
+      this.hoistedEntities.add(entity);
+      entity['parentScene'] = this;
+      return entity;
+    });
+
+    Scene.signalResolver.set(Signal.Type.EntityTransformation, function(signal) {
+      const { entity, parent: newParent = null } = signal as Signal.EntityTransformation;
+
+      if (entity.parent === newParent) {
+        return;
+      }
+
+      if (!this.entityInstances.has(entity)) {
+        throw new Error('Could not transfer an uninstantiated entity');
+      }
+
+      if (newParent && !this.entityInstances.has(newParent)) {
+        throw new Error('Could not transfer the entity to an uninstantiated parent');
+      }
+
+      if (entity === newParent) {
+        throw new Error('Could not transfer the entity to itself');
+      }
+
+      if (newParent) {
+        newParent['children'].add(entity);
+        if (entity.parent === null) {
+          this.hoistedEntities.delete(entity);
+        }
+      } else {
+        this.hoistedEntities.add(entity);
+      }
+
+      entity.parent?.['children'].delete(entity);
+
+      const pureEntityTransform = entity.transform.toPureTransform();
+
+      const previousParent = entity['parentEntity'];
+      entity['parentEntity'] = newParent;
+      if (newParent && !previousParent) {
+        entity.transform.calibrateLocals();
+      } else {
+        entity.transform.calibrateGlobals(pureEntityTransform);
+      }
+
+      return entity;
+    })
+
+    Scene.signalResolver.set(Signal.Type.EntityDestruction, function(signal) {
+      const { entity } = signal as Signal.EntityDestruction;
+
+      const entityExisted = this.entityInstances.delete(entity);
+      if (!entityExisted) {
+        return false;
+      }
+
+      if (!entity.parent) {
+        this.hoistedEntities.delete(entity);
+      }
+
+      for (const component of entity.components) {
+        this.componentInstances.delete(component);
+      }
+
+      entity.parent?.['children'].delete(entity);
+      entity['parentScene'] = null;
+      entity['parentEntity'] = null;
+
+
+      for (const children of entity.getChildren()) {
+        children.destroy();
+      }
+
+      return true;
+    })
+
+    Scene.signalResolver.set(Signal.Type.ComponentInstantiation, function(signal) {
+      const { componentConstructor, entity } = signal as Signal.ComponentInstantiation;
+      const baseConstructor = Component.getBaseclassOf(componentConstructor);
+      if (entity.components.findOfType(baseConstructor)) {
+        throw new Error(`Component of class ${baseConstructor.name} already exists`);
+      }
+
+      const componentInstance = new componentConstructor(entity);
+      this.componentInstances.add(componentInstance);
+      entity.components['hoistingComponents'].set(baseConstructor, componentInstance);
+
+      this.emitSignal(Component.onAwake, {
+        target: [componentInstance],
+      }).resolve();
+
+      return componentInstance;
+    });
+
+    Scene.signalResolver.set(Signal.Type.ComponentDestruction, function(signal) {
+      const { componentConstructor, entity } = signal as Signal.ComponentDestruction;
+
+      const baseClassOfConstructor = Component.getBaseclassOf(componentConstructor)
+      const componentInstance = entity.components['hoistingComponents'].get(baseClassOfConstructor);
+      if (!componentInstance) {
+        return null;
+      }
+
+      this.componentInstances.delete(componentInstance);
+      entity.components['hoistingComponents'].delete(baseClassOfConstructor);
+      
+      return componentInstance;
+    });
   }
 }
 
@@ -755,19 +677,11 @@ export type Signal = (
 );
 
 export namespace Signal {
-  export type FromType<T extends Signal.Type> = Omit<Signal & { type: T }, 'type'>;
-
-  export enum Type {
-    EntityInstantiation,
-    EntityDestruction,
-    EntityTransformation,
-    ComponentInstantiation,
-    ComponentDestruction,
-    SignalEmission,
-  }
+  export type FromType<T extends Signal.Type> = Signal & { type: T };
 
   export interface Base<T extends Type> {
     readonly type: T;
+    resolve: () => any;
   }
 
   export type SignalCollection = Signal[] | readonly Signal[];
@@ -779,7 +693,7 @@ export namespace Signal {
     T
   );
 
-  type SignalResponse<T extends Signal> = (
+  export type SignalResponse<T extends Signal> = (
     T extends Signal.EntityInstantiation ? Entity : 
     T extends Signal.EntityTransformation ? boolean :
     T extends Signal.EntityDestruction ? boolean :
@@ -827,6 +741,9 @@ export namespace Signal {
     }
   }
 
+  export type Creator<T extends Signal> = Omit<T, 'resolve' | 'onResolution'>;
+  export type CreatorOrigin<T extends Creator<Signal>> = T extends Creator<infer U> ? U : never;
+
   export interface EntityInstantiation extends Signal.Base<Signal.Type.EntityInstantiation> {
     readonly origin?: Entity;
   }
@@ -857,14 +774,13 @@ export namespace Signal {
     readonly symbol: symbol;
     readonly args: Args;
     readonly target?: Emission.ExecutionLevel | Component[];
-    readonly onResolution: (cb: () => void) => this;
   }
 
   export namespace SignalEmission {
     export interface Options<Args extends unknown[] = unknown[], _Return = unknown> {
       readonly initiator?: Component | EntityTransform | undefined;
       readonly args?: Args;
-      readonly target?: Emission.ExecutionLevel  | Component[];
+      readonly target?: Emission.ExecutionLevel | Component[];
     }
   }
 }
