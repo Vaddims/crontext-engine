@@ -1,4 +1,4 @@
-import { CacheManager, Cache } from "../cache-manager";
+import { CacheManager, Cache } from "./cache-manager";
 
 export class SimulationCacheManager extends CacheManager<SimulationCache.Entry.Plugin, SimulationCache.Entry.Controller> {
   override createController(propertyKey: string | symbol): SimulationCache.Entry.Controller {

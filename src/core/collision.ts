@@ -2,8 +2,8 @@ import { Collider } from "../components";
 import { nearestPointOnSegment } from "../utils";
 import { Shape } from "./shape";
 import { Vector } from "./vector";
-import { MemoizationPlugin } from "./systems/cache-plugins/memoization-cache-plugin";
-import { CacheManager } from "./systems/cache-manager";
+import { MemoizationPlugin } from "./cache/plugins/memoization.capl";
+import { CacheManager } from "./cache/cache-manager";
 
 type ShapeTuple = [Shape, Shape];
 

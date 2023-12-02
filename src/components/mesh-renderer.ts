@@ -4,8 +4,8 @@ import { Color } from "../core/color";
 import { Shape } from "../core/shape";
 import { Rectangle } from "../shapes/rectangle";
 import BuildinComponent from "../core/buildin-component";
-import { RestoreCacheOnUpdatePlugin } from "../core/systems/cache-plugins/restore-cache-update.capl";
-import { MemoizationOnSimulationUpdatePlugin } from "../core/systems/cache-plugins/memoization-simulation-update.capl";
+import { TickRestorePlugin } from "../core/cache/plugins/tick-restore.capl";
+import { TickMemoizationPlugin } from "../core/cache/plugins/tick-memoization.capl";
 
 enum CacheKey {
   RVP = 'relativeVerticesPosition',
@@ -17,7 +17,7 @@ export class MeshRenderer extends BuildinComponent {
   public color: Color = Color.black;
 
   [Component.onAwake]() {
-    this.cacheManager.controller[CacheKey.RVP].setPlugin(new MemoizationOnSimulationUpdatePlugin(() => (
+    this.cacheManager.controller[CacheKey.RVP].setPlugin(new TickMemoizationPlugin(() => (
       this.shape.withTransform(Transform.setRotation(this.transform.rotation).setScale(this.transform.scale).setPosition(this.transform.position))
     )));
   }

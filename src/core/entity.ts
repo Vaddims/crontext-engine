@@ -1,8 +1,8 @@
 import { nanoid } from "nanoid";
 import { EntityTransform } from "./entity-transform";
 import { Scene, Signal } from "./scene";
-import { EntityComponentSystem } from "./systems/entity-component-system";
-import { EntityLayerSystem } from "./systems/entity-layer-system";
+import { EntityComponentManager } from "./managers/entity-component-manager";
+import { EntityLayerManager } from "./managers/entity-layer-manager";
 import { Transformator } from "objectra";
 
 export enum EntitySceneStatus {
@@ -19,9 +19,9 @@ export class Entity {
   private parentScene: Scene | null = null;
   private parentEntity: Entity | null = null;
 
-  public readonly components = new EntityComponentSystem(this);
+  public readonly components = new EntityComponentManager(this);
   public readonly transform = new EntityTransform(this);
-  public readonly layers = new EntityLayerSystem();
+  public readonly layers = new EntityLayerManager();
   private readonly children = new Set<Entity>();
 
   @Transformator.Exclude()

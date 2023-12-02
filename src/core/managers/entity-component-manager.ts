@@ -1,16 +1,10 @@
 import { Transformator } from "objectra";
-import { Constructor } from "objectra/dist/types/util.types";
 import { Component, ComponentConstructor } from "../component";
 import { Entity } from "../entity";
 import { Signal } from "../scene";
 
-@Transformator.Register({
-  // symbolIteratorEntryDepth: 1,
-  // useSerializationSymbolIterator: true,
-  // getter: (target: EntityComponentSystem, instance: Component) => target.find(instance.constructor as Constructor),
-  // setter: (target: EntityComponentSystem, instance: Component) => target.addInstance(instance),
-})
-export class EntityComponentSystem {
+@Transformator.Register()
+export class EntityComponentManager {
   private readonly hoistingComponents = new Map<ComponentConstructor, Component>();
 
   @Transformator.ConstructorArgument()

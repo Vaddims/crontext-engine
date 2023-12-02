@@ -1,16 +1,15 @@
 import { Transformator } from "objectra";
-import { Constructor } from "objectra/dist/types/util.types";
 import { Layer } from "../layer";
 
-@Transformator.Register<EntityLayerSystem, {name: string}[]>({
+@Transformator.Register<EntityLayerManager, {name: string}[]>({
   serializator: (bridge) => bridge.instance.instances().map(bridge.serialize),
-  instantiator: (bridge) => new EntityLayerSystem(
+  instantiator: (bridge) => new EntityLayerManager(
     bridge.representer
       .map((serializedLayer: any) => Layer.find(bridge.instantiateRepresenter(serializedLayer.name)))
       .filter(layer => layer instanceof Layer) as readonly Layer[],
   ),
 })
-export class EntityLayerSystem extends WeakSet<Layer> {
+export class EntityLayerManager extends WeakSet<Layer> {
   public hasLayer(layer: Layer) {
     return Layer.registrations.has(layer) && super.has(layer);
   }

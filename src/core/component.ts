@@ -7,8 +7,8 @@ import type { EntityTransform } from "./entity-transform";
 import { Gizmos } from "./gizmos";
 import { Scene, Signal } from "./scene";
 import { Constructor } from "objectra/dist/types/util.types";
-import { CacheManager } from "./systems/cache-manager";
-import { SimulationCacheManager } from "./systems/cache-systems/simulation-cache-manager";
+import { CacheManager } from "./cache/cache-manager";
+import { SimulationCacheManager } from "./cache/simulation-cache-manager";
 
 const onInternalUpdate = Symbol('ComponentInternalUpdate');
 
