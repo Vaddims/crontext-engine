@@ -1,5 +1,5 @@
 import { Component, Input, Renderer } from "../core";
-import { Scene } from "../core/scene";
+import { Scene, Signal } from "../core/scene";
 import { Objectra } from "objectra";
 import { Engine } from "../core/engine";
 import { Time } from "../core/time";
@@ -38,6 +38,10 @@ export class Simulation {
       this.start();
     }
 
+    this.activeScene.requestComponentSignalEmission(Component.onAwake, {
+      target: Signal.Emission.ExecutionLevel.Broadcast,
+    })
+
     return this.activeScene;
   }
 
@@ -47,14 +51,11 @@ export class Simulation {
   }
 
   updateTick() {
-    this.scene['resolveActionRequests']();
+    this.scene['resolveSignals']();
     if (this.updateState === SimulationUpdateState.Frozen) {
       return;
     }
 
-    // if (this.updateOnFrameChange) {
-    //   this.update();
-    // }
     this.update();
   }
 
@@ -63,35 +64,36 @@ export class Simulation {
 
     Engine['contextSimulation'] = this;
 
-    const coldStart = this.updateState === SimulationUpdateState.Frozen;
-    this.updateState = SimulationUpdateState.Active;
-    if (coldStart) {
-      activeScene.requestComponentActionEmission(Component.onStart, {
-        target: Scene.ActionRequests.ActionEmission.ExecutionLevels.Broadcast,
-      }).onResolution(() => {
-        console.log('finish')
-        activeScene.start();
-      });
-    }
+    activeScene.start();
+
+    // const coldStart = this.updateState === SimulationUpdateState.Frozen;
+    // this.updateState = SimulationUpdateState.Active;
+    // if (coldStart) {
+    //   activeScene.requestComponentActionEmission(Component.onStart, {
+    //     target: Scene.ActionRequests.ActionEmission.ExecutionLevels.Broadcast,
+    //   }).onResolution(() => {
+    //     activeScene.start();
+    //   });
+    // }
 
     Engine['contextSimulation'] = null;
   }
   
   public update() {
-    if (this.updateState !== SimulationUpdateState.Active) {
-      this.updateState = SimulationUpdateState.Frozen;
-      return;
-    }
+    // if (this.updateState !== SimulationUpdateState.Active) {
+    //   this.updateState = SimulationUpdateState.Frozen;
+    //   return;
+    // }
 
-    Engine['contextSimulation'] = this;
+    // Engine['contextSimulation'] = this;
 
-    Input.emitStaged(this);
-    this.scene.requestComponentActionEmission(Component.onInternalUpdate);
-    this.scene.requestComponentActionEmission(Component.onUpdate)
-    this.scene.requestComponentActionEmission(Component.onCollisionUpdate);
-    this.scene.update();
+    // Input.emitStaged(this);
+    // this.scene.requestComponentSignalEmission(Component.onInternalUpdate);
+    // this.scene.requestComponentSignalEmission(Component.onUpdate)
+    // this.scene.requestComponentSignalEmission(Component.onCollisionUpdate);
+    // this.scene.update();
 
-    Engine['contextSimulation'] = null;
+    // Engine['contextSimulation'] = null;
   }
   
   public stop() {

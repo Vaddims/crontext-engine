@@ -40,7 +40,7 @@ export class EntityTransform {
     return (...args: T extends Component.ActionMethod<infer A> ? A : []) => {
       const requestArguments = args ?? [];
       type ResultType = T extends Component.ActionMethod<any, infer U, any, any> ? U : never;
-      return scene.requestComponentActionEmission<typeof requestArguments, ResultType>(actionSymbol, {
+      return scene.requestComponentSignalEmission<typeof requestArguments, ResultType>(actionSymbol, {
         args: requestArguments,
         target: 1,
         initiator: this,

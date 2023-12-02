@@ -20,11 +20,11 @@ export class Scene implements Iterable<Entity> {
   private readonly componentInstances = new Set<Component>();
   
   @Transformator.Exclude()
-  private readonly actionRequests: Scene.ActionRequest[] = [];
+  private readonly signals: Signal[] = [];
   @Transformator.Exclude()
-  private readonly actionRequestResult = new WeakMap<Scene.ActionRequest, unknown>();
+  private readonly signalResult = new WeakMap<Signal, unknown>();
   @Transformator.Exclude()
-  private readonly actionRequestResultCallbacks = new WeakMap<Scene.ActionRequest, Function[]>();
+  private readonly signalResultCallbacks = new WeakMap<Signal, Function[]>();
 
   @Transformator.Exclude()
   public readonly meshRendererSpatialPartition = new SpatialPartition<MeshRenderer>(3);
@@ -112,6 +112,7 @@ export class Scene implements Iterable<Entity> {
   }
 
   public recacheSpatialPartition() {
+    console.log('recache spatial partion')
     const components = this.getComponents();
     const meshRenderers = components.filter(component => component.constructor.name === 'MeshRenderer') as MeshRenderer[];
     this.meshRendererSpatialPartition['headBranch'] = null;
@@ -178,61 +179,62 @@ export class Scene implements Iterable<Entity> {
     return targets;
   }
 
-  private addActionRequest(actionRequest: Scene.ActionRequest) {
-    this.actionRequests.push(actionRequest);
+  private addSignal(signal: Signal) {
+    this.signals.push(signal);
+
   }
   
-  public requestEntityInstantiation(entity?: Entity): Scene.ActionRequests.EntityInstantiation {
+  public requestEntityInstantiation(entity?: Entity): Signal.EntityInstantiation {
     const entityInstantiationRequest: any = {
-      type: Scene.ActionRequest.Types.EntityInstantiation,
+      type: Signal.Type.EntityInstantiation,
       origin: entity,
     } as const;
 
-    this.addActionRequest(entityInstantiationRequest);
+    this.addSignal(entityInstantiationRequest);
     return entityInstantiationRequest;
   }
 
-  public requestEntityTransformation(entity: Entity, parent?: Entity | null): Scene.ActionRequests.EntityTransformation {
+  public requestEntityTransformation(entity: Entity, parent?: Entity | null): Signal.EntityTransformation {
     const entityTransformationRequest = {
-      type: Scene.ActionRequest.Types.EntityTransformation,
+      type: Signal.Type.EntityTransformation,
       entity,
       parent,
     } as const;
 
-    this.addActionRequest(entityTransformationRequest);
+    this.addSignal(entityTransformationRequest);
     return entityTransformationRequest;
   }
 
-  public requestEntityDestruction(entity: Entity): Scene.ActionRequests.EntityDestruction {
+  public requestEntityDestruction(entity: Entity): Signal.EntityDestruction {
     const entityDestructionRequest = {
-      type: Scene.ActionRequest.Types.EntityDestruction,
+      type: Signal.Type.EntityDestruction,
       entity,
     } as const;
 
-    this.addActionRequest(entityDestructionRequest);
+    this.addSignal(entityDestructionRequest);
     return entityDestructionRequest;
   }
 
-  public requestComponentActionEmission<Args extends any[], Return>(
-   symbol: symbol, options?: Scene.ActionRequests.ActionEmission.Options<Args, Return>
-  ): Scene.ActionRequests.ActionEmission<Args, Return> {
+  public requestComponentSignalEmission<Args extends any[], Return>(
+   symbol: symbol, options?: Signal.SignalEmission.Options<Args, Return>
+  ): Signal.SignalEmission<Args, Return> {
     const {
       args = [],
-      target = Scene.ActionRequests.ActionEmission.ExecutionLevels.Broadcast,
+      target = Signal.Emission.ExecutionLevel.Broadcast,
       initiator,
     } = options ?? {};
 
     const scene = this;
-    const actionEmissionRequest: Scene.ActionRequests.ActionEmission<Args, Return> = {
-      type: Scene.ActionRequest.Types.ActionEmission,
+    const signalEmissionRequest: Signal.SignalEmission<Args, Return> = {
+      type: Signal.Type.SignalEmission,
       symbol,
       args: args as any,
       target,
       initiator,
       onResolution: function (cb) {
-        const arr = scene.actionRequestResultCallbacks.get(this);
+        const arr = scene.signalResultCallbacks.get(this);
         if (!arr) {
-          scene.actionRequestResultCallbacks.set(this, [cb]);
+          scene.signalResultCallbacks.set(this, [cb]);
         } else {
           arr.push(cb);
         }
@@ -241,50 +243,50 @@ export class Scene implements Iterable<Entity> {
       }
     };
 
-    this.addActionRequest(actionEmissionRequest);
-    return actionEmissionRequest;
+    this.addSignal(signalEmissionRequest);
+    return signalEmissionRequest;
   }
 
   public requestComponentInstantiation<T extends ComponentConstructor>(componentConstructor: T, entity: Entity) {
-    const componentInstantiationRequest: Scene.ActionRequests.ComponentInstantiation<T> = {
-      type: Scene.ActionRequest.Types.ComponentInstantiation,
+    const componentInstantiationRequest: Signal.ComponentInstantiation<T> = {
+      type: Signal.Type.ComponentInstantiation,
       componentConstructor,
       entity,
     };
 
-    this.addActionRequest(componentInstantiationRequest);
+    this.addSignal(componentInstantiationRequest);
     return componentInstantiationRequest;
   }
 
   public requestComponentDestruction<T extends ComponentConstructor>(componentConstructor: T, entity: Entity) {
-    const componentDestructionRequest: Scene.ActionRequests.ComponentDestruction<T> = {
-      type: Scene.ActionRequest.Types.ComponentDestruction,
+    const componentDestructionRequest: Signal.ComponentDestruction<T> = {
+      type: Signal.Type.ComponentDestruction,
       componentConstructor,
       entity,
     }
     
-    this.addActionRequest(componentDestructionRequest)
+    this.addSignal(componentDestructionRequest)
     return componentDestructionRequest;
   }
 
   public instantEntityInstantiation(entity: Entity): Entity | undefined {
     const instantiationRequest = this.requestEntityInstantiation(entity);
     this.update();
-    return this.actionRequestResult.get(instantiationRequest) as any;
+    return this.signalResult.get(instantiationRequest) as any;
   }
 
-  public instantResolve<T extends Scene.ActionRequest>(actionRequest: T) {
+  public instantResolve<T extends Signal>(signal: T) {
     this.update();
 
-    if (!this.actionRequestResult.has(actionRequest)) {
+    if (!this.signalResult.has(signal)) {
       throw new Error('No action request match for instant resolve');
     }
 
-    return this.actionRequestResult.get(actionRequest) as Scene.ActionRequest.Response<T>;
+    return this.signalResult.get(signal) as Signal.Response<T>;
   }
 
-  private resolveEntityInstantitationRequest(instantiationActionRequest: Scene.ActionRequests.EntityInstantiation) {
-    const { origin } = instantiationActionRequest;
+  private resolveEntityInstantitationSignal(instantiationSignal: Signal.EntityInstantiation) {
+    const { origin } = instantiationSignal;
     const entity = origin ? Objectra.duplicate(origin) : new Entity();
     this.entityInstances.add(entity);
     this.hoistedEntities.add(entity);
@@ -292,8 +294,8 @@ export class Scene implements Iterable<Entity> {
     return entity;
   }
 
-  private resolveEntityTransformationRequest(transformationActionRequest: Scene.ActionRequests.EntityTransformation) {
-    const { entity, parent: newParent = null } = transformationActionRequest;
+  private resolveEntityTransformationSignal(transformationSignal: Signal.EntityTransformation) {
+    const { entity, parent: newParent = null } = transformationSignal;
 
     if (entity.parent === newParent) {
       return;
@@ -335,8 +337,8 @@ export class Scene implements Iterable<Entity> {
     return entity;
   }
 
-  private resolveEntityDestructionRequest(destructionActionRequest: Scene.ActionRequests.EntityDestruction) {
-    const { entity } = destructionActionRequest;
+  private resolveEntityDestructionSignal(destructionSignal: Signal.EntityDestruction) {
+    const { entity } = destructionSignal;
 
     const entityExisted = this.entityInstances.delete(entity);
     if (!entityExisted) {
@@ -366,7 +368,7 @@ export class Scene implements Iterable<Entity> {
     return true;
   }
 
-  private resolveComponentInstantiationRequest(componentInstantiationRequest: Scene.ActionRequests.ComponentInstantiation) {
+  private resolveComponentInstantiationSignal(componentInstantiationRequest: Signal.ComponentInstantiation) {
     const { componentConstructor, entity } = componentInstantiationRequest;
     const baseConstructor = Component.getBaseclassOf(componentConstructor);
     if (entity.components.findOfType(baseConstructor)) {
@@ -374,16 +376,13 @@ export class Scene implements Iterable<Entity> {
     }
 
     const componentInstance = new componentConstructor(entity);
-    this.requestComponentActionEmission(Component.onAwake, {
-      target: [componentInstance],
-    });
-
     this.componentInstances.add(componentInstance);
     entity.components['hoistingComponents'].set(baseConstructor, componentInstance);
+
     return componentInstance;
   }
 
-  private resolveComponentDestructionRequest(componentDestructionRequest: Scene.ActionRequests.ComponentDestruction): Component | null {
+  private resolveComponentDestructionSignal(componentDestructionRequest: Signal.ComponentDestruction): Component | null {
     const { componentConstructor, entity } = componentDestructionRequest;
 
     const baseClassOfConstructor = Component.getBaseclassOf(componentConstructor)
@@ -398,73 +397,74 @@ export class Scene implements Iterable<Entity> {
     return componentInstance;
   }
 
-  private resolvePrimitiveActionRequest(actionRequest: Scene.ActionRequest) {
-    const { Types } = Scene.ActionRequest;
+  private resolvePrimitiveSignal(signal: Signal) {
+    const { Type } = Signal;
+    const { type } = signal;
 
     type Resolution = ReturnType<
-      | typeof this.resolveEntityInstantitationRequest
-      | typeof this.resolveEntityTransformationRequest
-      | typeof this.resolveEntityDestructionRequest
-      | typeof this.resolveComponentInstantiationRequest
-      | typeof this.resolveComponentDestructionRequest
+      | typeof this.resolveEntityInstantitationSignal
+      | typeof this.resolveEntityTransformationSignal
+      | typeof this.resolveEntityDestructionSignal
+      | typeof this.resolveComponentInstantiationSignal
+      | typeof this.resolveComponentDestructionSignal
     >
 
     let resolution: Resolution;
 
-    switch(actionRequest.type) {
-      case Types.EntityInstantiation:
-        resolution = this.resolveEntityInstantitationRequest(actionRequest);
+    switch(type) {
+      case Type.EntityInstantiation:
+        resolution = this.resolveEntityInstantitationSignal(signal);
         break;
       
-      case Types.EntityTransformation:
-        resolution = this.resolveEntityTransformationRequest(actionRequest);
+      case Type.EntityTransformation:
+        resolution = this.resolveEntityTransformationSignal(signal);
         break;
         
-        case Types.EntityDestruction:
-          const mrInstance = [...actionRequest.entity.components].find(c => c.constructor.name === 'MeshRenderer');
+        case Type.EntityDestruction:
+          const mrInstance = [...signal.entity.components].find(c => c.constructor.name === 'MeshRenderer');
           if (mrInstance) {
             this.removeEntitySpatialPartion(mrInstance as MeshRenderer);
           }
 
-          resolution = this.resolveEntityDestructionRequest(actionRequest);
+          resolution = this.resolveEntityDestructionSignal(signal);
         break;
 
-      case Types.ComponentInstantiation:
-        resolution = this.resolveComponentInstantiationRequest(actionRequest);
+      case Type.ComponentInstantiation:
+        resolution = this.resolveComponentInstantiationSignal(signal);
         break;
 
-      case Types.ComponentDestruction:
-        if (actionRequest.componentConstructor.name === 'MeshRenderer') {
-          const component = actionRequest.entity.components.get(actionRequest.componentConstructor);
+      case Type.ComponentDestruction:
+        if (signal.componentConstructor.name === 'MeshRenderer') {
+          const component = signal.entity.components.get(signal.componentConstructor);
           if (component) {
             this.removeEntitySpatialPartion(component as MeshRenderer);
           }
         }
 
-        resolution = this.resolveComponentDestructionRequest(actionRequest) as Component | null;
+        resolution = this.resolveComponentDestructionSignal(signal) as Component | null;
         break;
     }
 
-    switch(actionRequest.type) {
-      case Types.EntityInstantiation:
-      case Types.EntityTransformation:
-      case Types.ComponentInstantiation:
-        if (resolution instanceof Entity) {
-          this.recacheEntitySpatialPartition(resolution);
-        }
+    // switch(Signal.type) {
+    //   case Types.EntityInstantiation:
+    //   case Types.EntityTransformation:
+    //   case Types.ComponentInstantiation:
+    //     if (resolution instanceof Entity) {
+    //       this.recacheEntitySpatialPartition(resolution);
+    //     }
 
-        if (resolution instanceof Component) {
-          this.recacheEntitySpatialPartition(resolution.entity);
-          break;
-        }
-        break;
-    }
+    //     if (resolution instanceof Component) {
+    //       this.recacheEntitySpatialPartition(resolution.entity);
+    //       break;
+    //     }
+    //     break;
+    // }
 
     return resolution;
   }
 
-  private resolveActionRequests() {
-    if (this.actionRequests.length === 0) {
+  private resolveSignals() {
+    if (this.signals.length === 0) {
       return;
     }
 
@@ -473,22 +473,22 @@ export class Scene implements Iterable<Entity> {
 
     const generatorMethodComponentMap = new Map<AnyGenerator, [Component.ActionMethod.Any, Component]>();
     const generatorParentMap = new Map<AnyGenerator, AnyGenerator>();
-    const generatorEmissionRequest = new Map<AnyGenerator, Scene.ActionRequests.ActionEmission>();
-    const generatorActionRequestHistoryMap = new Map<AnyGenerator, Scene.ActionRequest[]>();
+    const generatorEmissionRequest = new Map<AnyGenerator, Signal.SignalEmission>();
+    const generatorSignalHistoryMap = new Map<AnyGenerator, Signal[]>();
 
-    const actionEmissionFinishQuantity = new Map<Scene.ActionRequests.ActionEmission, number>();
+    const signalEmissionFinishQuantity = new Map<Signal.SignalEmission, number>();
     
-    const actionEmissionGeneratorMap = new Map<Scene.ActionRequests.ActionEmission, AnyGenerator[]>();
-    const actionRequestResultMap = new Map<Scene.ActionRequest, any>(); // Results for each requested action request
-    const actionEmissionResponses = new Map<Scene.ActionRequests.ActionEmission, Scene.ActionRequest.Emission.SegmentResponse[]>();
+    const signalEmissionGeneratorMap = new Map<Signal.SignalEmission, AnyGenerator[]>();
+    const signalResultMap = new Map<Signal, any>(); // Results for each requested action request
+    const signalEmissionResponses = new Map<Signal.SignalEmission, Signal.Emission.SegmentResponse[]>();
 
-    const addActionRequestResultSegment = (actionRequest: Scene.ActionRequests.ActionEmission, emissionExecutionResult: Scene.ActionRequest.Emission.SegmentResponse) => {
-      pushElementToMapValue(actionEmissionResponses, actionRequest, emissionExecutionResult);
+    const addSignalResultSegment = (Signal: Signal.SignalEmission, emissionExecutionResult: Signal.Emission.SegmentResponse) => {
+      pushElementToMapValue(signalEmissionResponses, Signal, emissionExecutionResult);
 
-      const responses = actionEmissionResponses.get(actionRequest)!;
-      const awaitingResponses = actionEmissionFinishQuantity.get(actionRequest);
+      const responses = signalEmissionResponses.get(Signal)!;
+      const awaitingResponses = signalEmissionFinishQuantity.get(Signal);
       if (responses.length === awaitingResponses) {
-        actionRequestResultMap.set(actionRequest, responses)
+        signalResultMap.set(Signal, responses)
       }
     }
 
@@ -496,7 +496,7 @@ export class Scene implements Iterable<Entity> {
 
     let updateQuantity = 0;
     const MAX_UPDATE_QUANTITY = 100000;
-    useActionRequestHopperResolve();
+    useSignalHopperResolve();
 
     do {
       if (updateQuantity++ > MAX_UPDATE_QUANTITY) {
@@ -511,7 +511,7 @@ export class Scene implements Iterable<Entity> {
         const result = resolveGeneratorIteration(executionGenerator);
 
         // Resolve all added action requests
-        useActionRequestHopperResolve();
+        useSignalHopperResolve();
 
         // If done, unroll the generator to its parent
         handleItarationResult(executionGenerator, result);
@@ -520,11 +520,11 @@ export class Scene implements Iterable<Entity> {
       // Forced update loop
     } while (currentGeneratorExecutions.size > 0);
 
-    for (const [actionRequest, result] of actionRequestResultMap) {
-      this.actionRequestResult.set(actionRequest, result);
+    for (const [signal, result] of signalResultMap) {
+      this.signalResult.set(signal, result);
 
-      if (actionRequest.type === Scene.ActionRequest.Types.ActionEmission) {
-        const arr = this.actionRequestResultCallbacks.get(actionRequest);
+      if (signal.type === Signal.Type.SignalEmission) {
+        const arr = this.signalResultCallbacks.get(signal);
         arr?.forEach(cb => cb());
       }
     }
@@ -534,16 +534,16 @@ export class Scene implements Iterable<Entity> {
     // }
 
     function resolveGeneratorIteration(generator: AnyGenerator) {
-      const generatorActionRequestHistory = generatorActionRequestHistoryMap.get(generator) ?? [];
-      const lastActionRequest = generatorActionRequestHistory[generatorActionRequestHistory.length - 1];
+      const generatorSignalHistory = generatorSignalHistoryMap.get(generator) ?? [];
+      const lastSignal = generatorSignalHistory[generatorSignalHistory.length - 1];
 
       let responseArguments;
 
-      if (lastActionRequest) {
-        if (actionRequestResultMap.has(lastActionRequest)) {
-          responseArguments = actionRequestResultMap.get(lastActionRequest);
-        } else if (lastActionRequest?.type === Scene.ActionRequest.Types.ActionEmission) {
-          const actionResponse = actionEmissionResponses.get(lastActionRequest) ?? [];
+      if (lastSignal) {
+        if (signalResultMap.has(lastSignal)) {
+          responseArguments = signalResultMap.get(lastSignal);
+        } else if (lastSignal?.type === Signal.Type.SignalEmission) {
+          const actionResponse = signalEmissionResponses.get(lastSignal) ?? [];
           responseArguments = [...actionResponse];
         }
       }
@@ -556,7 +556,7 @@ export class Scene implements Iterable<Entity> {
       const generatorParent = generatorParentMap.get(generator);
 
       if (iteratorResult.done) {
-        const actionRequest = generatorEmissionRequest.get(generator) as Scene.ActionRequests.ActionEmission;
+        const Signal = generatorEmissionRequest.get(generator) as Signal.SignalEmission;
         const methodComponent = generatorMethodComponentMap.get(generator);
 
         if (!methodComponent) {
@@ -565,13 +565,13 @@ export class Scene implements Iterable<Entity> {
 
         const [ method, component ] = methodComponent;
 
-        const emissionExecutionResult: Scene.ActionRequest.Emission.SegmentResponse = { 
+        const emissionExecutionResult: Signal.Emission.SegmentResponse = { 
           result: iteratorResult.value,
           component,
           method,
         };
 
-        addActionRequestResultSegment(actionRequest, emissionExecutionResult)
+        addSignalResultSegment(Signal, emissionExecutionResult)
         currentGeneratorExecutions.delete(generator)
 
         if (!generatorParent) {
@@ -588,39 +588,39 @@ export class Scene implements Iterable<Entity> {
         return;
       }
 
-      const { value: yieldActionRequest } = iteratorResult;
-      if (!yieldActionRequest) {
+      const { value: yieldSignal } = iteratorResult;
+      if (!yieldSignal) {
         return;
       }
 
-      if (Symbol.iterator in yieldActionRequest) {
+      if (Symbol.iterator in yieldSignal) {
         throw new Error('Not implemented');
       }
 
-      pushElementToMapValue(generatorActionRequestHistoryMap, generator, yieldActionRequest);
+      pushElementToMapValue(generatorSignalHistoryMap, generator, yieldSignal);
 
-      if (yieldActionRequest.type !== Scene.ActionRequest.Types.ActionEmission) {
+      if (yieldSignal.type !== Signal.Type.SignalEmission) {
         return;
       }
 
-      const yieldedActionEmissionGenerators = actionEmissionGeneratorMap.get(yieldActionRequest);
+      const yieldedSignalEmissionGenerators = signalEmissionGeneratorMap.get(yieldSignal);
 
-      if (!yieldedActionEmissionGenerators) {
+      if (!yieldedSignalEmissionGenerators) {
         return;
       }
 
-      for (const yieldedActionEmissionGenerator of yieldedActionEmissionGenerators) {
-        generatorParentMap.set(yieldedActionEmissionGenerator, generator);
+      for (const yieldedSignalEmissionGenerator of yieldedSignalEmissionGenerators) {
+        generatorParentMap.set(yieldedSignalEmissionGenerator, generator);
       }
 
       currentGeneratorExecutions.delete(generator);
     }
 
     function initializeComponentRequestMethod(
-      actionEmissionRequest: Scene.ActionRequests.ActionEmission, 
+      SignalEmissionRequest: Signal.SignalEmission, 
       receiver: Component.ImplicitActionMethodWrapper
-    ): Scene.ActionRequest.Emission.MethodInitialization | void {
-      const { symbol, args } = actionEmissionRequest;
+    ): Signal.Emission.MethodInitialization | void {
+      const { symbol, args } = SignalEmissionRequest;
       const eventMethod = receiver[symbol]?.bind(receiver);
       if (!eventMethod) {
         return;
@@ -633,25 +633,25 @@ export class Scene implements Iterable<Entity> {
   
       const generator = eventMethod(...args);
       generatorMethodComponentMap.set(generator, [eventMethod, receiver]);
-      pushElementToMapValue(actionEmissionGeneratorMap, actionEmissionRequest, generator);
+      pushElementToMapValue(signalEmissionGeneratorMap, SignalEmissionRequest, generator);
 
       return { method: eventMethod, generator, component: receiver };
     }
 
-    function initializeEmissionRequest(actionEmissionRequest: Scene.ActionRequests.ActionEmission) {
-      const { ExecutionLevels } = Scene.ActionRequests.ActionEmission;
+    function initializeEmissionRequest(SignalEmissionRequest: Signal.SignalEmission) {
+      const { ExecutionLevel } = Signal.Emission;
 
       const { 
         initiator,
-        target = Scene.ActionRequests.ActionEmission.ExecutionLevels.EntityBroadcast,
-      } = actionEmissionRequest;
+        target = ExecutionLevel.EntityBroadcast,
+      } = SignalEmissionRequest;
 
       const resolve = (receivers: Component[]) => {
-        actionEmissionFinishQuantity.set(actionEmissionRequest, receivers.length);
+        signalEmissionFinishQuantity.set(SignalEmissionRequest, receivers.length);
 
         return (receivers as Component.ImplicitActionMethodWrapper[])
-          .map((component) => initializeComponentRequestMethod(actionEmissionRequest, component))
-          .filter(Boolean) as Scene.ActionRequest.Emission.MethodInitialization[];
+          .map((component) => initializeComponentRequestMethod(SignalEmissionRequest, component))
+          .filter(Boolean) as Signal.Emission.MethodInitialization[];
       }
 
       if (Array.isArray(target)) {
@@ -659,17 +659,17 @@ export class Scene implements Iterable<Entity> {
       }
 
       switch (target) {
-        case ExecutionLevels.Broadcast:
+        case ExecutionLevel.Broadcast:
           return resolve(self.getComponents());
         
-        case ExecutionLevels.EntityBroadcast:
+        case ExecutionLevel.EntityBroadcast:
           if (!initiator) {
             throw new Error('Cannot broadcast emission to entity without initiator');
           }
 
           return resolve([...initiator.entity.components.instances()]);
 
-        case ExecutionLevels.EntityDeepBroadcast:
+        case ExecutionLevel.EntityDeepBroadcast:
           if (!initiator) {
             throw new Error('Cannot broadcast emission to entity without initiator');
           }
@@ -680,7 +680,7 @@ export class Scene implements Iterable<Entity> {
       }
     }
 
-    function resolveActionEmissionStage(emissionRequest: Scene.ActionRequests.ActionEmission) {
+    function resolveSignalEmissionStage(emissionRequest: Signal.SignalEmission) {
       const methodInitializationResults = initializeEmissionRequest(emissionRequest);
 
       for (const methodInitializationResult of methodInitializationResults) {
@@ -690,13 +690,13 @@ export class Scene implements Iterable<Entity> {
 
         // Primitive method
         if ('result' in methodInitializationResult) {
-          const response: Scene.ActionRequest.Emission.SegmentResponse<any> = { 
+          const response: Signal.Emission.SegmentResponse<any> = { 
             result: methodInitializationResult.result,
             component: methodInitializationResult.component,
             method: methodInitializationResult.method,  
           };
 
-          addActionRequestResultSegment(emissionRequest, response)
+          addSignalResultSegment(emissionRequest, response)
           continue;
         }
 
@@ -707,167 +707,164 @@ export class Scene implements Iterable<Entity> {
       }
     }
 
-    function useActionRequestHopperResolve() {
+    function useSignalHopperResolve() {
       do {
-        const emissionRequests: Scene.ActionRequests.ActionEmission[] = [];
+        const emissionRequests: Signal.SignalEmission[] = [];
         // First resolve all primitive action requests
-        for (const actionRequest of self.actionRequests) {
-          if (actionRequest.type === Scene.ActionRequest.Types.ActionEmission) {
-            emissionRequests.push(actionRequest);
+        for (const signal of self.signals) {
+          if (signal.type === Signal.Type.SignalEmission) {
+            emissionRequests.push(signal);
             continue;
           }
   
-          const result = actionRequestResultMap.has(actionRequest) 
-            ? actionRequestResultMap.get(actionRequest) 
-            : self.resolvePrimitiveActionRequest(actionRequest);
+          // NO REQUESTS FROM PRIMITIVE ACTION REQUERSTS
+          const result = signalResultMap.has(signal) 
+            ? signalResultMap.get(signal) 
+            : self.resolvePrimitiveSignal(signal);
 
-          actionRequestResultMap.set(actionRequest, result);
+          signalResultMap.set(signal, result);
         }
 
-        self.actionRequests.length = 0;
+        self.signals.length = 0;
   
         for (const emissionRequest of emissionRequests) {
-          resolveActionEmissionStage(emissionRequest);
+          resolveSignalEmissionStage(emissionRequest);
         }
 
         // Action request hopper like loop
-      } while (self.actionRequests.length > 0);
+      } while (self.signals.length > 0);
     }
   }
 
   public start() {
-    this.recacheSpatialPartition();
+    // this.recacheSpatialPartition();
   }
 
   public update() {
-    this.resolveActionRequests();
+    this.resolveSignals();
   }
 }
 
-export namespace Scene {
-  export namespace ActionRequest {
-    export enum Types {
-      EntityInstantiation,
-      EntityDestruction,
-      EntityTransformation,
-      ComponentInstantiation,
-      ComponentDestruction,
-      ActionEmission,
-    }
+export type Signal = (
+  | Signal.EntityInstantiation
+  | Signal.EntityTransformation
+  | Signal.EntityDestruction
+  | Signal.ComponentInstantiation
+  | Signal.ComponentDestruction
+  | Signal.SignalEmission<any, any>
+);
 
-    export interface Base<T extends Types> {
-      readonly type: T;
-    }
+export namespace Signal {
+  export type FromType<T extends Signal.Type> = Omit<Signal & { type: T }, 'type'>;
 
-    export type ActionRequestCollection = ActionRequest[] | readonly ActionRequest[];
-
-    export type ValidRequestFormat = ActionRequest | ActionRequestCollection | undefined;
-    export type Response<T extends ValidRequestFormat> = (
-      T extends ActionRequestCollection ? ActionRequestCollectionResponse<T> :
-      T extends ActionRequest ? ActionRequestResponse<T> : 
-      T
-    );
-
-    type ActionRequestResponse<T extends ActionRequest> = (
-      T extends ActionRequests.EntityInstantiation ? Entity : 
-      T extends ActionRequests.EntityTransformation ? boolean :
-      T extends ActionRequests.EntityDestruction ? boolean :
-      T extends ActionRequests.ComponentInstantiation ? Component :
-      T extends ActionRequests.ComponentDestruction ? boolean :
-      T extends ActionRequests.ActionEmission<any, infer U> 
-        ? ActionRequest.Emission.ClusterResponse<U> :
-      never
-    );
-
-    type ActionRequestCollectionResponse<T extends ActionRequestCollection> = { 
-      [K in keyof T]: Response<T[K] & ActionRequest>
-    }
-
-    export namespace Emission {
-      export namespace MethodInitializations {
-        interface BaseResponse {
-          readonly component: Component;
-          readonly method: Component.ActionMethods.Instantaneous;
-        }
-  
-        export interface InstantaneousResponse extends BaseResponse {
-          readonly result: unknown;
-        } 
-        
-        export interface SequentialResponse extends BaseResponse {
-          readonly generator: Generator<Component.ActionMethods.Sequential.YieldRequest, unknown, unknown>;
-        }
-      }
-      
-      export type MethodInitialization = MethodInitializations.InstantaneousResponse | MethodInitializations.SequentialResponse;
-  
-      export interface SegmentResponse<T = any> {
-        readonly component: Component;
-        readonly method: Component.ActionMethod;
-        readonly result: T;
-      }
-  
-      export type ClusterResponse<T = any> = SegmentResponse<T>[];
-    }
+  export enum Type {
+    EntityInstantiation,
+    EntityDestruction,
+    EntityTransformation,
+    ComponentInstantiation,
+    ComponentDestruction,
+    SignalEmission,
   }
 
-  export namespace ActionRequests {
-    export interface EntityInstantiation extends ActionRequest.Base<ActionRequest.Types.EntityInstantiation> {
-      readonly origin?: Entity;
-    }
-
-    export interface EntityDestruction extends ActionRequest.Base<ActionRequest.Types.EntityDestruction> {
-      readonly entity: Entity;
-    }
-
-    export interface EntityTransformation extends ActionRequest.Base<ActionRequest.Types.EntityTransformation> {
-      readonly entity: Entity;
-      readonly parent?: Entity | null | undefined;
-    }
-
-    export interface ComponentInstantiation<T extends ComponentConstructor = ComponentConstructor> extends ActionRequest.Base<ActionRequest.Types.ComponentInstantiation> {
-      readonly componentConstructor: T;
-      readonly entity: Entity;
-    }
-
-    export interface ComponentDestruction<T extends ComponentConstructor = ComponentConstructor> extends ActionRequest.Base<ActionRequest.Types.ComponentDestruction> {
-      readonly componentConstructor: T;
-      readonly entity: Entity;
-    }
-
-    export interface ActionEmission<
-      Args extends unknown[] = unknown[], _Return = unknown
-    > extends ActionRequest.Base<ActionRequest.Types.ActionEmission> {
-      readonly initiator?: Component | EntityTransform | undefined;
-      readonly symbol: symbol;
-      readonly args: Args;
-      readonly target?: ActionEmission.ExecutionLevels | Component[];
-      readonly onResolution: (cb: () => void) => this;
-    }
-
-    export namespace ActionEmission {
-      export interface Options<Args extends unknown[] = unknown[], _Return = unknown> {
-        readonly initiator?: Component | EntityTransform | undefined;
-        readonly args?: Args;
-        readonly target?: ActionEmission.ExecutionLevels | Component[];
-      }
-
-      export enum ExecutionLevels {
-        Broadcast,
-        EntityBroadcast,
-        EntityDeepBroadcast,
-      }
-    }
+  export interface Base<T extends Type> {
+    readonly type: T;
   }
 
-  export type ActionRequest = (
-    | ActionRequests.EntityInstantiation
-    | ActionRequests.EntityTransformation
-    | ActionRequests.EntityDestruction
-    | ActionRequests.ComponentInstantiation
-    | ActionRequests.ComponentDestruction
-    | ActionRequests.ActionEmission<any, any>
+  export type SignalCollection = Signal[] | readonly Signal[];
+
+  export type ValidRequestFormat = Signal | SignalCollection | undefined;
+  export type Response<T extends ValidRequestFormat> = (
+    T extends SignalCollection ? SignalCollectionResponse<T> :
+    T extends Signal ? SignalResponse<T> : 
+    T
   );
 
-  export type ActionRequestFromType<T extends ActionRequest.Types> = Omit<ActionRequest & { type: T }, 'type'>;
+  type SignalResponse<T extends Signal> = (
+    T extends Signal.EntityInstantiation ? Entity : 
+    T extends Signal.EntityTransformation ? boolean :
+    T extends Signal.EntityDestruction ? boolean :
+    T extends Signal.ComponentInstantiation ? Component :
+    T extends Signal.ComponentDestruction ? boolean :
+    T extends Signal.SignalEmission<any, infer U> 
+      ? Signal.Emission.ClusterResponse<U> :
+    never
+  );
+
+  type SignalCollectionResponse<T extends SignalCollection> = { 
+    [K in keyof T]: Response<T[K] & Signal>
+  }
+
+  export namespace Emission {
+    export namespace MethodInitializations {
+      interface BaseResponse {
+        readonly component: Component;
+        readonly method: Component.ActionMethods.Instantaneous;
+      }
+
+      export interface InstantaneousResponse extends BaseResponse {
+        readonly result: unknown;
+      } 
+      
+      export interface SequentialResponse extends BaseResponse {
+        readonly generator: Generator<Component.ActionMethods.Sequential.YieldRequest, unknown, unknown>;
+      }
+    }
+    
+    export type MethodInitialization = MethodInitializations.InstantaneousResponse | MethodInitializations.SequentialResponse;
+
+    export interface SegmentResponse<T = any> {
+      readonly component: Component;
+      readonly method: Component.ActionMethod;
+      readonly result: T;
+    }
+
+    export type ClusterResponse<T = any> = SegmentResponse<T>[];
+
+    export enum ExecutionLevel {
+      Broadcast,
+      EntityBroadcast,
+      EntityDeepBroadcast,
+    }
+  }
+
+  export interface EntityInstantiation extends Signal.Base<Signal.Type.EntityInstantiation> {
+    readonly origin?: Entity;
+  }
+
+  export interface EntityDestruction extends Signal.Base<Signal.Type.EntityDestruction> {
+    readonly entity: Entity;
+  }
+
+  export interface EntityTransformation extends Signal.Base<Signal.Type.EntityTransformation> {
+    readonly entity: Entity;
+    readonly parent?: Entity | null | undefined;
+  }
+
+  export interface ComponentInstantiation<T extends ComponentConstructor = ComponentConstructor> extends Signal.Base<Signal.Type.ComponentInstantiation> {
+    readonly componentConstructor: T;
+    readonly entity: Entity;
+  }
+
+  export interface ComponentDestruction<T extends ComponentConstructor = ComponentConstructor> extends Signal.Base<Signal.Type.ComponentDestruction> {
+    readonly componentConstructor: T;
+    readonly entity: Entity;
+  }
+
+  export interface SignalEmission<
+    Args extends unknown[] = unknown[], _Return = unknown
+  > extends Signal.Base<Signal.Type.SignalEmission> {
+    readonly initiator?: Component | EntityTransform | undefined;
+    readonly symbol: symbol;
+    readonly args: Args;
+    readonly target?: Emission.ExecutionLevel | Component[];
+    readonly onResolution: (cb: () => void) => this;
+  }
+
+  export namespace SignalEmission {
+    export interface Options<Args extends unknown[] = unknown[], _Return = unknown> {
+      readonly initiator?: Component | EntityTransform | undefined;
+      readonly args?: Args;
+      readonly target?: Emission.ExecutionLevel  | Component[];
+    }
+  }
 }

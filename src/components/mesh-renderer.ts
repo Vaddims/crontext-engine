@@ -16,10 +16,15 @@ export class MeshRenderer extends BuildinComponent {
   public shape: Shape = new Rectangle();
   public color: Color = Color.black;
 
-  [Component.onStart]() {
+  [Component.onAwake]() {
+    console.log('awake', new Error().stack);
     this.cacheManager.controller[CacheKey.RVP].setPlugin(new MemoizationOnSimulationUpdatePlugin(() => (
       this.shape.withTransform(Transform.setRotation(this.transform.rotation).setScale(this.transform.scale).setPosition(this.transform.position))
     )));
+  }
+
+  [Component.onStart]() {
+    console.log('start');
   }
 
   [EntityTransform.onChange]() {
@@ -27,7 +32,6 @@ export class MeshRenderer extends BuildinComponent {
   }
 
   public relativeVerticesPosition() {
-    const shape = (<Shape>this.cache[CacheKey.RVP]);
-    return shape.vertices;
+    return (<Shape>this.cache[CacheKey.RVP]).vertices;
   }
 }

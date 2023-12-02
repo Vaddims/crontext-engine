@@ -5,7 +5,7 @@ import type { Collision } from "./collision";
 import { Entity } from "./entity";
 import type { EntityTransform } from "./entity-transform";
 import { Gizmos } from "./gizmos";
-import { Scene } from "./scene";
+import { Scene, Signal } from "./scene";
 import { Constructor } from "objectra/dist/types/util.types";
 import { CacheManager } from "./systems/cache-manager";
 import { SimulationCacheManager } from "./systems/cache-systems/simulation-cache-manager";
@@ -42,10 +42,10 @@ export class Component {
     return (...args: T extends Component.ActionMethod<infer A> ? A : []) => {
       const requestArguments = args ?? [];
       type ResultType = T extends Component.ActionMethod<any, infer U, any, any> ? U : never;
-      return scene.requestComponentActionEmission<typeof requestArguments, ResultType>(actionSymbol, {
+      return scene.requestComponentSignalEmission<typeof requestArguments, ResultType>(actionSymbol, {
         initiator: this,
         args: requestArguments,
-        target: Scene.ActionRequests.ActionEmission.ExecutionLevels.EntityBroadcast,
+        target: Signal.Emission.ExecutionLevel.EntityBroadcast,
         ...options,
       });
     }
@@ -164,7 +164,7 @@ export interface Component {
 export namespace Component {
   export namespace Emit {
     export interface Options {
-      readonly target?: Scene.ActionRequests.ActionEmission.ExecutionLevels | Component[];
+      readonly target?: Signal.Emission.ExecutionLevel | Component[];
     }
   }
 
@@ -178,7 +178,7 @@ export namespace Component {
     > = ((...args: Args) => Generator<YieldRequest, Return, YieldResult>);
 
     export namespace Sequential {
-      export type YieldRequest = Scene.ActionRequest | Iterable<Scene.ActionRequest> | undefined;
+      export type YieldRequest = Signal | Iterable<Signal> | undefined;
       export type Generator<YieldRequest extends Sequential.YieldRequest = Sequential.YieldRequest, Return = unknown, YieldResult = unknown> = globalThis.Generator<YieldRequest, Return, YieldResult>;
       
       export namespace Generator {
@@ -213,5 +213,5 @@ export namespace Component {
 
   export type ImplicitActionMethodWrapper = Component & { [key: symbol]: Component.ActionMethod | undefined };
 
-  export type ActionResponse<T extends Scene.ActionRequest.ValidRequestFormat> = Scene.ActionRequest.Response<T>;
+  export type ActionResponse<T extends Signal.ValidRequestFormat> = Signal.Response<T>;
 }

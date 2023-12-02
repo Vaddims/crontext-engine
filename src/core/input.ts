@@ -49,18 +49,18 @@ export class Input {
   private static addKeyEventListeners() {
     const emitKeyAction = (event: KeyboardEvent, broadcastSymbol: symbol, action: 'down' | 'up') => {
       Engine.getRunningSimulations().forEach(simulation => {
-        simulation.scene.requestComponentActionEmission(broadcastSymbol, {
+        simulation.scene.requestComponentSignalEmission(broadcastSymbol, {
           args: [event.key]
         });
 
         const caseSensitiveKeyAction = Input.caseSensitiveKeyActionMap.get(event.key);
         if (caseSensitiveKeyAction) {
-          return simulation.scene.requestComponentActionEmission(caseSensitiveKeyAction[action]);
+          return simulation.scene.requestComponentSignalEmission(caseSensitiveKeyAction[action]);
         }
         
         const caseInsensitiveKeyAction = Input.caseInsensitiveKeyActionMap.get(event.key.toUpperCase());
         if (caseInsensitiveKeyAction) {
-          return simulation.scene.requestComponentActionEmission(caseInsensitiveKeyAction[action]);
+          return simulation.scene.requestComponentSignalEmission(caseInsensitiveKeyAction[action]);
         }
       })
     }
@@ -107,7 +107,7 @@ export class Input {
         responseMap.set(camera, actionEventResponse);
       }
 
-      simulation.scene.requestComponentActionEmission(symbol, {
+      simulation.scene.requestComponentSignalEmission(symbol, {
         args: [event, responseMap],
       });
       
@@ -119,7 +119,7 @@ export class Input {
           return;
         }
 
-        simulation.scene.requestComponentActionEmission(symbol, {
+        simulation.scene.requestComponentSignalEmission(symbol, {
           args: [event],
         });
       })
@@ -135,13 +135,13 @@ export class Input {
     for (const keyDown of this.keyDown) {      
       const caseSensitiveKeyAction = Input.caseSensitiveKeyActionMap.get(keyDown);
       if (caseSensitiveKeyAction) {
-        simulation.scene.requestComponentActionEmission(caseSensitiveKeyAction.press);
+        simulation.scene.requestComponentSignalEmission(caseSensitiveKeyAction.press);
         continue;
       }
       
       const caseInsensitiveKeyAction = Input.caseInsensitiveKeyActionMap.get(keyDown.toUpperCase());
       if (caseInsensitiveKeyAction) {
-        simulation.scene.requestComponentActionEmission(caseInsensitiveKeyAction.press);
+        simulation.scene.requestComponentSignalEmission(caseInsensitiveKeyAction.press);
         continue;
       }
     }
