@@ -1,8 +1,8 @@
 import { CacheManager, Cache } from "../cache-manager";
-import { SimulationCache } from "../simulation-cache-manager";
+import { TickCache } from "../tick-cache-manager";
 
 const uncomputedCache: typeof CacheManager['uncomputed'] = CacheManager['uncomputed']
-export class TickMemoizationPlugin implements SimulationCache.Entry.Plugin {
+export class TickMemoizationPlugin implements TickCache.Entry.Plugin {
   readonly useOnlyPluginAccessors = true;
   private readonly computeValue: () => unknown;
   constructor(computeValue: () => unknown) {

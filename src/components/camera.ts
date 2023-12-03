@@ -63,11 +63,10 @@ export class Camera extends BuildinComponent {
     gizmos.highlightVertices(bounds.vertices, Color.blue);
 
     const { scene } = this.entity;
-    if (scene) {
-      for (const branch of scene.meshRendererSpatialPartition) {
-        const bounds = branch.cluster.getSpaceBounds();
-        gizmos.highlightVertices(bounds.vertices, new Color(0, 0, 255, 0.1));
-      }
+    const spatialPartition = scene.cache[MeshRenderer.CacheKey.MRSP];
+    for (const branch of spatialPartition) {
+      const bounds = branch.cluster.getSpaceBounds();
+      gizmos.highlightVertices(bounds.vertices, new Color(0, 0, 255, 0.1));
     }
 
     const {
@@ -86,12 +85,10 @@ export class Camera extends BuildinComponent {
 
   protected viewportCullingMask(renderer: Renderer) {
     const { scene } = this.entity;
-    if (!scene) {
-      throw new Error();
-    }
 
     const viewportBoundingBox = this.getBounds(renderer);
-    const boundingBoxViewportTraceMeshRenderers = scene.meshRendererSpatialPartition.getBoundingBoxHeightTraceElements(viewportBoundingBox);
+    const spatialPartition = scene.cache[MeshRenderer.CacheKey.MRSP];
+    const boundingBoxViewportTraceMeshRenderers = spatialPartition.getBoundingBoxHeightTraceElements(viewportBoundingBox);
 
     const viewportMeshRenderers = new Set<MeshRenderer>();
     for (const meshRenderer of boundingBoxViewportTraceMeshRenderers) {

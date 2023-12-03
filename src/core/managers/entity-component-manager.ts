@@ -1,11 +1,11 @@
 import { Transformator } from "objectra";
-import { Component, ComponentConstructor } from "../component";
+import { Component } from "../component";
 import { Entity } from "../entity";
 import { Signal } from "../scene";
 
 @Transformator.Register()
 export class EntityComponentManager {
-  private readonly hoistingComponents = new Map<ComponentConstructor, Component>();
+  private readonly hoistingComponents = new Map<Component.Constructor, Component>();
 
   @Transformator.ConstructorArgument()
   readonly entity: Entity;
@@ -34,12 +34,12 @@ export class EntityComponentManager {
     return this.hoistingComponents.size;
   }
 
-  private getSharedInstance<T extends ComponentConstructor>(componentConstructor: T) {
+  private getSharedInstance<T extends Component.Constructor>(componentConstructor: T) {
     const baseConstructor = Component.getBaseclassOf(componentConstructor);
     return this.hoistingComponents.get(baseConstructor) ?? null;
   }
 
-  public findOfType<T extends ComponentConstructor>(componentConstructor: T) {
+  public findOfType<T extends Component.Constructor>(componentConstructor: T) {
     const instance = this.getSharedInstance(componentConstructor);
     if (instance instanceof componentConstructor) {
       return instance as InstanceType<T>;
@@ -48,7 +48,7 @@ export class EntityComponentManager {
     return null;
   }
 
-  public getOfType<T extends ComponentConstructor>(componentConstructor: T) {
+  public getOfType<T extends Component.Constructor>(componentConstructor: T) {
     const instance = this.findOfType(componentConstructor);
     if (!instance) {
       throw new Error(`${componentConstructor.name} subclass not found`);
@@ -57,7 +57,7 @@ export class EntityComponentManager {
     return instance;
   }
 
-  public find<T extends ComponentConstructor>(componentConstructor: T) {
+  public find<T extends Component.Constructor>(componentConstructor: T) {
     const instance = this.getSharedInstance(componentConstructor);
     if (instance && instance.constructor == componentConstructor) {
       return instance as InstanceType<T>;
@@ -66,7 +66,7 @@ export class EntityComponentManager {
     return null;
   }
 
-  public get<T extends ComponentConstructor>(componentConstructor: T) {
+  public get<T extends Component.Constructor>(componentConstructor: T) {
     const instance = this.find(componentConstructor);
     if (!instance) {
       throw new Error(`${componentConstructor.name} instance does not exist`);
@@ -75,7 +75,7 @@ export class EntityComponentManager {
     return instance;
   }
 
-  public add<T extends ComponentConstructor>(componentConstructor: T) {
+  public add<T extends Component.Constructor>(componentConstructor: T) {
     const scene = this.entity.scene;
 
     if (!scene) {
@@ -99,7 +99,7 @@ export class EntityComponentManager {
     return false;
   }
 
-  public destroy(componentConstructor: ComponentConstructor) {
+  public destroy(componentConstructor: Component.Constructor) {
     const scene = this.entity.scene;
     if (!scene) {
       throw new Error('No scene')

@@ -1,7 +1,7 @@
 import { CacheManager, Cache } from "./cache-manager";
 
-export class SimulationCacheManager extends CacheManager<SimulationCache.Entry.Plugin, SimulationCache.Entry.Controller> {
-  override createController(propertyKey: string | symbol): SimulationCache.Entry.Controller {
+export class TickCacheManager extends CacheManager<TickCache.Entry.Plugin, TickCache.Entry.Controller> {
+  override createController(propertyKey: string | symbol): TickCache.Entry.Controller {
     const {
       findMetadata,
     } = this.getMetadataHelperFunctions(propertyKey);
@@ -32,7 +32,7 @@ export class SimulationCacheManager extends CacheManager<SimulationCache.Entry.P
   }
 }
 
-export namespace SimulationCache {
+export namespace TickCache {
   export namespace Entry {
     export interface Plugin extends Cache.Entry.Plugin {
       onUpdate?(metadata: Cache.Entry): void;

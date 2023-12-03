@@ -4,6 +4,7 @@ import { Scene, Signal } from "./scene";
 import { EntityComponentManager } from "./managers/entity-component-manager";
 import { EntityLayerManager } from "./managers/entity-layer-manager";
 import { Transformator } from "objectra";
+import { TickCacheManager } from "./cache/tick-cache-manager";
 
 export enum EntitySceneStatus {
   AwaitingInstantiation,
@@ -25,10 +26,14 @@ export class Entity {
   private readonly children = new Set<Entity>();
 
   @Transformator.Exclude()
-  private readonly cache: { [key: string]: any } = {};
+  public readonly cacheManager = new TickCacheManager();
+  @Transformator.Exclude()
+  public readonly cache = this.cacheManager.cache;
 
+  @Transformator.Exclude()
+  private readonly cachee: { [key: string]: any } = {};
   public establishCacheConnection<T>(key: string) {
-    const cache = this.cache;
+    const cache = this.cachee;
     
     return {
       get(): T | undefined {
@@ -54,9 +59,9 @@ export class Entity {
   }
 
   public get scene() {
-    // if (!this.parentScene) {
-    //   throw new Error(`No scene assigned to entity ${this.name}`);
-    // }
+    if (!this.parentScene) {
+      throw new Error(`No scene assigned to entity ${this.name}`);
+    }
 
     return this.parentScene;
   }

@@ -86,7 +86,7 @@ export class CacheManager<Plugin extends Cache.Entry.Plugin = Cache.Entry.Plugin
       clear: () => {
         const metadata = findMetadata();
         if (!metadata) {
-          return false;
+          return true;
         }
 
         if (metadata.plugin) {
@@ -95,7 +95,7 @@ export class CacheManager<Plugin extends Cache.Entry.Plugin = Cache.Entry.Plugin
           }
 
           if (metadata.plugin.useOnlyPluginAccessors) {
-            return false;
+            throw new Error(`Plugin(${metadata.plugin.constructor.name}) does support entry clear`);
           }
         }
 

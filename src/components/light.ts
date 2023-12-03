@@ -1,5 +1,5 @@
 import { Transformator } from "objectra";
-import { Component, ComponentConstructor, Ray, Renderer, Shape, Vector } from "../core";
+import { Component, Ray, Renderer, Shape, Vector } from "../core";
 import { VisibilityPolygon } from "../core/visibility-polygon";
 import { SimulationRenderingPipeline } from "../rendering-pipelines";
 import { Collider } from "./collider";
@@ -56,7 +56,7 @@ class LightSourceSegmentShareMap extends Map {
 @Component.Abstract()
 export class Light extends BuildinComponent {
   public usePhysicalRendering = true; // Rendering with shadow casts
-  public physicalRenderingDependence: ComponentConstructor<MeshRenderer> | ComponentConstructor<Collider> = MeshRenderer;
+  public physicalRenderingDependence: Component.Constructor<MeshRenderer> | Component.Constructor<Collider> = MeshRenderer;
 
   @Transformator.Exclude()
   public visibilityPolygonCache: VisibilityPolygon | null = null;

@@ -190,7 +190,8 @@ export class SimulationInspectorRenderer extends Renderer {
     renderingPipeline.renderMeshMarkup(this.canvasSize);
     
     const bounds = this.getBounds(renderer);
-    const boundingBoxViewportTraceMeshRenderers = scene.meshRendererSpatialPartition.getBoundingBoxHeightTraceElements(bounds);
+    const spatialPartition = this.simulation.scene.cache[MeshRenderer.CacheKey.MRSP];
+    const boundingBoxViewportTraceMeshRenderers = spatialPartition.getBoundingBoxHeightTraceElements(bounds);
 
     const viewportMeshRenderers = new Set<MeshRenderer>();
     for (const meshRenderer of boundingBoxViewportTraceMeshRenderers) {
@@ -205,7 +206,7 @@ export class SimulationInspectorRenderer extends Renderer {
       renderingPipeline.renderEntityMesh(viewportMeshRenderer);
     }
 
-    for (const branch of scene.meshRendererSpatialPartition) {
+    for (const branch of spatialPartition) {
       const bounds = branch.cluster.getSpaceBounds();
       gizmos.highlightVertices(bounds.vertices, new Color(0, 0, 255, 0.1));
     }

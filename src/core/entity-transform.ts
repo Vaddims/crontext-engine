@@ -29,7 +29,7 @@ export class EntityTransform {
   private internalLocalScale = Vector.one;
   private internalLocalRotation = 0;
 
-  public emit<T extends Component.ActionMethod<any, any, any, any>>(
+  public emit<T extends Component.SignalMethod.Any>(
     actionSymbol: symbol
   ) {
     const { scene } = this.entity;
@@ -37,9 +37,9 @@ export class EntityTransform {
       throw new Error();
     }
 
-    return (...args: T extends Component.ActionMethod<infer A> ? A : []) => {
+    return (...args: T extends Component.SignalMethod<infer A> ? A : []) => {
       const requestArguments = args ?? [];
-      type ResultType = T extends Component.ActionMethod<any, infer U, any, any> ? U : never;
+      type ResultType = T extends Component.SignalMethod<any, infer U, any, any> ? U : never;
       return scene.emitSignal<typeof requestArguments, ResultType>(actionSymbol, {
         args: requestArguments,
         target: 1,
@@ -50,7 +50,7 @@ export class EntityTransform {
 
   private handleTransformationChange() {
     this.emit(EntityTransform.onChange)();
-    this.entity.scene?.recacheEntitySpatialPartition(this.entity);
+    // this.entity.scene?.recacheEntitySpatialPartition(this.entity);
   }
 
   public get position() {

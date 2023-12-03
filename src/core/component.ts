@@ -8,7 +8,7 @@ import { Gizmos } from "./gizmos";
 import { Scene, Signal } from "./scene";
 import { Constructor } from "objectra/dist/types/util.types";
 import { CacheManager } from "./cache/cache-manager";
-import { SimulationCacheManager } from "./cache/simulation-cache-manager";
+import { TickCacheManager } from "./cache/tick-cache-manager";
 
 const onInternalUpdate = Symbol('ComponentInternalUpdate');
 
@@ -20,7 +20,7 @@ export class Component {
   public readonly entity: Entity;
 
   @Transformator.Exclude()
-  protected readonly cacheManager = new SimulationCacheManager();
+  protected readonly cacheManager = new TickCacheManager();
 
   @Transformator.Exclude()
   public readonly cache = this.cacheManager.cache;
@@ -30,18 +30,18 @@ export class Component {
     this.transform = entity.transform;
   }
 
-  public emit<T extends Component.ActionMethod<any, any, any, any>>(
+  public emit<T extends Component.SignalMethod.Any>(
     actionSymbol: symbol,
-    options?: Component.Emit.Options,
+    options?: Component.Emission.Options,
   ) {
     const { scene } = this.entity;
     if (!scene) {
       throw new Error();
     }
 
-    return (...args: T extends Component.ActionMethod<infer A> ? A : []) => {
+    return (...args: T extends Component.SignalMethod<infer A> ? A : []) => {
       const requestArguments = args ?? [];
-      type ResultType = T extends Component.ActionMethod<any, infer U, any, any> ? U : never;
+      type ResultType = T extends Component.SignalMethod<any, infer U, any, any> ? U : never;
       return scene.emitSignal<typeof requestArguments, ResultType>(actionSymbol, {
         initiator: this,
         args: requestArguments,
@@ -59,9 +59,9 @@ export class Component {
     return this.entity.components.destroy(this.constructor as Constructor<Component>);
   }
 
-  public static getBaseclassOf(componentConstructor: ComponentConstructor) {
+  public static getBaseclassOf(componentConstructor: Component.Constructor) {
     let constructor = componentConstructor;
-    const getSuperConstructor = (target: ComponentConstructor) => Object.getPrototypeOf(target.prototype).constructor;
+    const getSuperConstructor = (target: Component.Constructor) => Object.getPrototypeOf(target.prototype).constructor;
     while (![Component, ...Component.baseComponentConstructors].includes(getSuperConstructor(constructor))) {
       constructor = getSuperConstructor(constructor);
     }
@@ -69,7 +69,7 @@ export class Component {
     return constructor;
   }
 
-  public static eventMethodIsSequential<T extends Component.ActionMethod<any[], any, any, any[]>>(
+  public static eventMethodIsSequential<T extends Component.SignalMethod<any[], any, any, any[]>>(
     eventMethod: T
   ): eventMethod is Extract<T, ((...args: any) => Generator<any, any, any>)> {
     return getFunctionType(eventMethod) === FunctionType.Generator;
@@ -127,48 +127,36 @@ export class Component {
   static readonly onCollisionUpdate = Symbol('EntityOnCollisionUpdate');
 }
 
-export type ComponentConstructor<T extends Component = Component> = new (entity: Entity) => T;
-
-type IsolatedEventMethod<Arg extends unknown[] = unknown[]> = Component.ActionMethod<Arg, void>;
-type IsolatedEventGenerator = ReturnType<Component.ActionMethods.Sequential<[], void>>;
 export interface Component {
-  [Component.onAwake]?(): void;
-  [Component.onAwake]?(): IsolatedEventGenerator;
-  [Component.onAwake]?: IsolatedEventMethod;
-
-  [Component.onStart]?(): void;
-  [Component.onStart]?(): IsolatedEventGenerator;
-  [Component.onStart]?: IsolatedEventMethod;
-
-  [Component.onUpdate]?(): void;
-  [Component.onUpdate]?(): IsolatedEventGenerator;
-  [Component.onUpdate]?: IsolatedEventMethod;
-
-  [Component.onFixedUpdate]?(): void;
-  [Component.onFixedUpdate]?(): IsolatedEventGenerator;
-  [Component.onFixedUpdate]?: IsolatedEventMethod;
-
-  [Component.onDestroy]?(): void;
-  [Component.onDestroy]?(): IsolatedEventGenerator;
-  [Component.onDestroy]?: IsolatedEventMethod;
-
-  [Component.onGizmosRender]?(gizmos: Gizmos): void;
-  [Component.onGizmosRender]?(gizmos: Gizmos): ReturnType<Component.ActionMethods.Sequential<[Gizmos], void>>;
-  [Component.onGizmosRender]?: Component.ActionMethod<[Gizmos], void>;
-
-  [Component.onCollision]?(collision: Collision<Collider>): void;
-  [Component.onCollision]?(collision: Collision<Collider>): ReturnType<Component.ActionMethods.Sequential<[Collision<Collider>], void>>;
-  [Component.onCollision]?: Component.ActionMethod<[Collision<Collider>], void>;
+  [Component.onAwake]?(): Component.SignalMethodResponse;
+  [Component.onStart]?(): Component.SignalMethodResponse;
+  [Component.onUpdate]?(): Component.SignalMethodResponse;
+  [Component.onFixedUpdate]?(): Component.SignalMethodResponse;
+  [Component.onDestroy]?(): Component.SignalMethodResponse;
+  [Component.onGizmosRender]?(gizmos: Gizmos): Component.SignalMethodResponse;
+  [Component.onCollision]?(collision: Collision<Collider>): Component.SignalMethodResponse;
 }
 
 export namespace Component {
-  export namespace Emit {
+  export type Constructor<T extends Component = Component> = new (entity: Entity) => T;
+
+  export namespace Emission {
     export interface Options {
       readonly target?: Signal.Emission.ExecutionLevel | Component[];
     }
   }
 
-  export namespace ActionMethods {
+  export type SignalMethod<
+    Args extends unknown[] = unknown[],
+    Return = unknown,
+    YieldRequest = SignalMethod.Sequential.YieldRequest, 
+    YieldResult = unknown,
+  > = (
+    | SignalMethod.Instantaneous<Args, Return>
+    | SignalMethod.Sequential<Args, Return, YieldRequest, YieldResult>
+  );
+
+  export namespace SignalMethod {
     export type Instantaneous<Args extends unknown[] = unknown[], Return = unknown> = (...args: Args) => Return;
     export type Sequential<
       Args extends unknown[] = [], 
@@ -184,34 +172,27 @@ export namespace Component {
       export namespace Generator {
         export type Any = Generator<Sequential.YieldRequest, any, any>;
       } 
+
+      export type Return<
+        Return = unknown,
+      > = ReturnType<Component.SignalMethod.Sequential<[], Return>>;
     }
-  }
 
-  export type ActionMethod<
-    Args extends unknown[] = unknown[],
-    Return = unknown,
-    YieldRequest = ActionMethods.Sequential.YieldRequest, 
-    YieldResult = unknown,
-  > = (
-    | ActionMethods.Instantaneous<Args, Return>
-    | ActionMethods.Sequential<Args, Return, YieldRequest, YieldResult>
-  );
+    export type GeneratorFrom<T> = (
+      T extends SignalMethod<any, any, any, any>
+      ? GeneratorFromEventMethod<T>
+      : never
+    );
 
-  export namespace ActionMethod {
-    export type GeneratorFrom<T> = T extends ActionMethod<any, any, any, any>
-    ? GeneratorFromEventMethod<T>
-    : never;
-
-    export type GeneratorFromEventMethod<T extends ActionMethod<any, any, any, any>> = (
+    export type GeneratorFromEventMethod<T extends SignalMethod<any, any, any, any>> = (
       T extends (...args: any[]) => Generator<any, any, any>
       ? ReturnType<T>
       : never
     );
 
-    export type Any = ActionMethod<any, any, any, any>;
+    export type Any = SignalMethod<any, any, any, any>;
   }
 
-  export type ImplicitActionMethodWrapper = Component & { [key: symbol]: Component.ActionMethod | undefined };
-
-  export type ActionResponse<T extends Signal.ValidRequestFormat> = Signal.Response<T>;
+  export type ImplicitSignalMethodWrapper = Component & { [key: symbol]: Component.SignalMethod | undefined };
+  export type SignalMethodResponse<Return = void> = SignalMethod.Sequential.Return<Return> | Return;
 }

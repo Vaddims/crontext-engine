@@ -163,9 +163,7 @@ export class Input {
 export namespace Input {
   export type MouseEventResolution = Map<Camera, Input.Mouse.ActionEvent>;
   export interface ComponentActions {
-    [Input.onMouseClick]?(event: MouseEvent): void;
-    [Input.onMouseClick]?(event: MouseEvent): ReturnType<Component.ActionMethods.Sequential<[MouseEvent, MouseEventResolution], void>>
-    [Input.onMouseClick]?: Component.ActionMethod<[MouseEvent, MouseEventResolution], void>;
+    [Input.onMouseClick]?(event: MouseEvent): Component.SignalMethodResponse;
   }
 
   export class KeyAction {

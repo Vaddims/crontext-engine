@@ -6,35 +6,34 @@ import { Rectangle } from "../../shapes";
 import { lerp, perpendicularProjection, nearestPointOnSegment, segmentWithSegmentIntersection } from "../../utils";
 import { Collider } from "../collider";
 import { Rigidbody } from "../rigidbody";
+import { MemoizationPlugin } from "../../core/cache/plugins/memoization.capl";
+
+enum CacheKey {
+  PCRVP = 'PolygonCollider:RelativeVerticesPosition',
+}
 
 @Transformator.Register()
 export class PolygonCollider extends Collider {
   public readonly shape = new Rectangle();
+
+  public [Component.onAwake]() {
+    this.entity.cacheManager.controller[CacheKey.PCRVP].setPlugin(new MemoizationPlugin(() => (
+      this.shape.withTransform(Transform.setRotation(this.transform.rotation).setScale(this.transform.scale).setPosition(this.transform.position))
+    )));
+  }
 
   public overlaps(collider: PolygonCollider) {      
     const overlaps = this.relativeShape().overlaps(collider.relativeShape());
     return overlaps;
   }
 
-  private uncachedRelativeVerticesPosition() {
-    const transformedShape = this.shape.withTransform(Transform.setRotation(this.transform.rotation).setScale(this.transform.scale).setPosition(this.transform.position));
-    return transformedShape;
-  }
-
-  public relativeVerticesPosition() {
-    const cache = this.entity.establishCacheConnection<readonly Vector[]>('pcrvp');
-    const value = cache.get();
-    if (value) {
-      return value;
-    }
-
-    const transformedShape = this.uncachedRelativeVerticesPosition();
-    cache.set(transformedShape.vertices);
-    return transformedShape.vertices;
+  // TODO Cleanup those 2 methods
+  public relativeVerticesPosition(): readonly Vector[] {
+    return this.entity.cache[CacheKey.PCRVP];
   }
 
   public relativeShape() {
-    return this.uncachedRelativeVerticesPosition();
+    return this.entity.cache[CacheKey.PCRVP];
   }
 
   public [Component.onCollisionUpdate]() {
@@ -88,26 +87,6 @@ export class PolygonCollider extends Collider {
     this.cache.collisions = collisions;
   }
 
-  acceptCollisionFromExternalCollider(externalCollision: Collision) {
-    if (!externalCollision.colliders.includes(this)) {
-      console.warn('No this collider in external collision colliders');
-      return;
-    }
-
-    const collision = new Collision({
-      colliders: (externalCollision.colliders[0] === this ? [...externalCollision.colliders] : [...externalCollision.colliders].reverse()) as Collision.Colliders,
-      depth: externalCollision.depth,
-      normal: externalCollision.normal.multiply(-1),
-    })
-
-    this.emit(Collider.onCollision)(collision);
-  }
-
-  [EntityTransform.onChange]() {
-    const cache = this.entity.establishCacheConnection<readonly Vector[]>('pcrvp');
-    cache.delete();
-  }
-
   public [Component.onGizmosRender](gizmos: Gizmos) {
     const scene = this.entity.scene!;
     const colliderRelativeShape = this.relativeShape();
@@ -143,5 +122,24 @@ export class PolygonCollider extends Collider {
         gizmos.renderFixedCircle(collision.contacts[1], .1, Color.black);
       }
     }
+  }
+
+  public [EntityTransform.onChange]() {
+    delete this.entity.cache[CacheKey.PCRVP];
+  }
+
+  public acceptCollisionFromExternalCollider(externalCollision: Collision) {
+    if (!externalCollision.colliders.includes(this)) {
+      console.warn('No this collider in external collision colliders');
+      return;
+    }
+
+    const collision = new Collision({
+      colliders: (externalCollision.colliders[0] === this ? [...externalCollision.colliders] : [...externalCollision.colliders].reverse()) as Collision.Colliders,
+      depth: externalCollision.depth,
+      normal: externalCollision.normal.multiply(-1),
+    })
+
+    this.emit(Collider.onCollision)(collision);
   }
 }

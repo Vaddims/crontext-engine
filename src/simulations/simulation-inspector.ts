@@ -1,7 +1,7 @@
 import { Optic } from "../core/optic";
 import { Simulation } from "./simulation";
 import { Vector } from "../core/vector";
-import { ComponentConstructor, Ray, Renderer, Shape, Space } from "../core";
+import {  Ray, Renderer, Shape, Space } from "../core";
 import { Entity } from "../core/entity";
 import { MeshRenderer } from "../components";
 import { Circle, Rectangle } from "../shapes";

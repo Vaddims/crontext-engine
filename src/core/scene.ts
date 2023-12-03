@@ -1,4 +1,4 @@
-import { Component, ComponentConstructor } from "./component";
+import { Component } from "./component";
 import { Entity } from "./entity";
 import { Objectra, Transformator, transformators } from 'objectra';
 import { pushElementToMapValue } from "../utils/buildin-helpers";
@@ -9,6 +9,8 @@ import { SpatialPartition } from "./spatial-partition/spatial-partition";
 import { getBaseLog } from "../utils";
 import { Constructor } from "objectra/dist/types/util.types";
 import { EntityTransform } from "./entity-transform";
+import { TickCacheManager } from "./cache/tick-cache-manager";
+import { Engine } from "./engine";
 
 export namespace Signal {
   export enum Type {
@@ -21,6 +23,12 @@ export namespace Signal {
   }
 }
 
+enum CacheKey {
+  SPC = 'spatialPartitionClusters',
+}
+
+const onInstantiationSymbol = Symbol('Scene.onInstantiation');
+
 @Transformator.Register<Scene>()
 export class Scene implements Iterable<Entity> {
   public name = 'Scene';
@@ -29,8 +37,16 @@ export class Scene implements Iterable<Entity> {
   private readonly entityInstances = new Set<Entity>();
   private readonly componentInstances = new Set<Component>();
 
+  constructor() {
+    const componentConstructors = Component.getUsableComponentConstructors();
+    componentConstructors.map(constructor => (<any>constructor)[onInstantiationSymbol]?.(this));
+  }
+
   @Transformator.Exclude()
-  public readonly meshRendererSpatialPartition = new SpatialPartition<MeshRenderer>(3);
+  public readonly cacheManager = new TickCacheManager();
+
+  @Transformator.Exclude()
+  public readonly cache = this.cacheManager.cache;
 
   @Transformator.Exclude()
   private readonly signals: Signal[] = [];
@@ -40,97 +56,6 @@ export class Scene implements Iterable<Entity> {
 
   @Transformator.Exclude()
   private readonly signalResultCallbacks = new WeakMap<Signal, Function[]>();
-
-  // TODO Add all edge cases
-  public recacheEntitySpatialPartition(entity: Entity) {
-    const mr = [...entity.components].find(component => component.constructor.name === 'MeshRenderer') as MeshRenderer | undefined;
-    if (mr) {
-      this.recacheMeshRendererSpatialPartition(mr);
-    }
-  }
-
-  public recacheMeshRendererSpatialPartition(meshRenderer: MeshRenderer) {
-    const getShapeAppropriateClusterLevel = (shape: Shape) => {
-      const epsilonBias = 0.01;
-      const boundsScale = shape.bounds.getScale();
-      const maxScale = Math.max(boundsScale.x, boundsScale.y);
-      const clusterLevel = Math.ceil(getBaseLog(this.meshRendererSpatialPartition.clusterOpacity, maxScale + epsilonBias));
-      return clusterLevel;
-    }
-
-    const getBelongingClusters = (bounds: Shape, level: number) => {
-      const belongingClusters = [];
-      boundloop: for (let i = 0; i < bounds.vertices.length; i++) {
-        const cluster = SpatialPartitionCluster.createFromPoint(bounds.vertices[i], level, this.meshRendererSpatialPartition.clusterOpacity);
-        if (i === 0) {
-          belongingClusters.push(cluster);
-          continue;
-        }
-
-        for (const belongingCluster of belongingClusters) {
-          if (cluster.identifier === belongingCluster.identifier) {
-            continue boundloop;
-          }
-        }
-
-        belongingClusters.push(cluster);
-      }
-
-      return belongingClusters;
-    }
-
-    const meshRendererShape = new Shape(meshRenderer.relativeVerticesPosition());
-    const clusterLevel = getShapeAppropriateClusterLevel(meshRendererShape);
-
-    const entitySPCCache = meshRenderer.entity.establishCacheConnection<SpatialPartitionCluster[] | null>('spc');
-    const cachedBoundClusters = entitySPCCache.get();
-    const boundClusters = cachedBoundClusters ? [...cachedBoundClusters] : null;
-    entitySPCCache.set([]); // delete cache
-
-    // delete clusters that the element occupais
-    if (boundClusters) {
-      for (const boundCluster of boundClusters) {
-        this.meshRendererSpatialPartition.modifyClusterElements(boundCluster, (elements) => {
-          elements.delete(meshRenderer);
-        });
-      }
-    }
-
-    const newBoundClusters = getBelongingClusters(meshRendererShape.bounds, clusterLevel);
-
-    for (const boundCluster of newBoundClusters) {
-      this.meshRendererSpatialPartition.injectBranch(boundCluster, [meshRenderer]);
-    }
-    
-    entitySPCCache.modify((existingClusters => (
-      existingClusters ? existingClusters.concat(...newBoundClusters) : [...newBoundClusters]
-    )));
-  }
-
-  public removeEntitySpatialPartion(meshRenderer: MeshRenderer) {
-    const entitySPCCache = meshRenderer.entity.establishCacheConnection<SpatialPartitionCluster[] | null>('spc');
-    const cachedBoundClusters = entitySPCCache.get();
-    const boundClusters = cachedBoundClusters ? [...cachedBoundClusters] : null;
-    entitySPCCache.set([]); // delete cache
-
-    // delete clusters that the element occupais
-    if (boundClusters) {
-      for (const boundCluster of boundClusters) {
-        this.meshRendererSpatialPartition.modifyClusterElements(boundCluster, (elements) => {
-          elements.delete(meshRenderer);
-        });
-      }
-    }
-  }
-
-  public recacheSpatialPartition() {
-    const components = this.getComponents();
-    const meshRenderers = components.filter(component => component.constructor.name === 'MeshRenderer') as MeshRenderer[];
-    this.meshRendererSpatialPartition['headBranch'] = null;
-    for (const meshRenderer of meshRenderers) {
-      this.recacheMeshRendererSpatialPartition(meshRenderer);
-    }
-  }
 
   public [Symbol.iterator]() {
     return this.entityInstances.values();
@@ -145,7 +70,7 @@ export class Scene implements Iterable<Entity> {
   }
 
   public getCameras() {
-    return this.getComponents().filter(component => component.constructor.name === 'Camera') as Camera[];
+    return this.getComponents().filter(component => component.constructor.name === 'Camera') as unknown as Camera[];
   }
 
   public find(name: string) {
@@ -221,7 +146,7 @@ export class Scene implements Iterable<Entity> {
   }
 
   public start() {
-    this.recacheSpatialPartition();
+
   }
 
   public update() {
@@ -274,10 +199,10 @@ export class Scene implements Iterable<Entity> {
       return;
     }
 
-    type AnyGenerator = Component.ActionMethods.Sequential.Generator.Any;
+    type AnyGenerator = Component.SignalMethod.Sequential.Generator.Any;
     const scene = this;
 
-    const generatorMethodComponentMap = new Map<AnyGenerator, [Component.ActionMethod.Any, Component]>();
+    const generatorMethodComponentMap = new Map<AnyGenerator, [Component.SignalMethod.Any, Component]>();
     const generatorParentMap = new Map<AnyGenerator, AnyGenerator>();
     const generatorEmissionRequest = new Map<AnyGenerator, Signal.SignalEmission>();
     const generatorSignalHistoryMap = new Map<AnyGenerator, Signal[]>();
@@ -336,9 +261,9 @@ export class Scene implements Iterable<Entity> {
     }
 
     // TODO Remove from here
-    if (updateQuantity > 0) {
-      this.recacheSpatialPartition();
-    }
+    // if (updateQuantity > 0) {
+    //   this.recacheSpatialPartition();
+    // }
 
     function resolveGeneratorIteration(generator: AnyGenerator) {
       const generatorSignalHistory = generatorSignalHistoryMap.get(generator) ?? [];
@@ -359,7 +284,7 @@ export class Scene implements Iterable<Entity> {
       return yieldRequest;
     }
 
-    function handleItarationResult(generator: AnyGenerator, iteratorResult: IteratorResult<Component.ActionMethods.Sequential.YieldRequest, any>) {
+    function handleItarationResult(generator: AnyGenerator, iteratorResult: IteratorResult<Component.SignalMethod.Sequential.YieldRequest, any>) {
       const generatorParent = generatorParentMap.get(generator);
 
       if (iteratorResult.done) {
@@ -425,7 +350,7 @@ export class Scene implements Iterable<Entity> {
 
     function initializeComponentRequestMethod(
       signalEmissionRequest: Signal.SignalEmission, 
-      receiver: Component.ImplicitActionMethodWrapper
+      receiver: Component.ImplicitSignalMethodWrapper
     ): Signal.Emission.MethodInitialization | void {
       const { symbol, args } = signalEmissionRequest;
       const eventMethod = receiver[symbol]?.bind(receiver);
@@ -456,7 +381,7 @@ export class Scene implements Iterable<Entity> {
       const resolve = (receivers: Component[]) => {
         signalEmissionFinishQuantity.set(signal, receivers.length);
 
-        const recieverResults = (receivers as Component.ImplicitActionMethodWrapper[])
+        const recieverResults = (receivers as Component.ImplicitSignalMethodWrapper[])
           .map((component) => initializeComponentRequestMethod(signal, component))
           .filter(Boolean) as Signal.Emission.MethodInitialization[];
 
@@ -549,8 +474,9 @@ export class Scene implements Iterable<Entity> {
     }
   }
 
-  private static readonly signalResolver = new Map<Signal.Type, (this: Scene, signal: Signal) => any>();
+  public static readonly onInstantiation: typeof onInstantiationSymbol = onInstantiationSymbol;
 
+  private static readonly signalResolver = new Map<Signal.Type, (this: Scene, signal: Signal) => any>();
   static {
     Scene.signalResolver.set(Signal.Type.EntityInstantiation, function(signal) {
       const { origin } = signal as Signal.EntityInstantiation;
@@ -617,13 +543,12 @@ export class Scene implements Iterable<Entity> {
       }
 
       for (const component of entity.components) {
-        this.componentInstances.delete(component);
+        component.destroy().resolve();
       }
 
       entity.parent?.['children'].delete(entity);
       entity['parentScene'] = null;
       entity['parentEntity'] = null;
-
 
       for (const children of entity.getChildren()) {
         children.destroy();
@@ -659,6 +584,10 @@ export class Scene implements Iterable<Entity> {
         return null;
       }
 
+      this.emitSignal(Component.onDestroy, {
+        target: [componentInstance],
+      }).resolve();
+
       this.componentInstances.delete(componentInstance);
       entity.components['hoistingComponents'].delete(baseClassOfConstructor);
       
@@ -679,40 +608,38 @@ export type Signal = (
 export namespace Signal {
   export type FromType<T extends Signal.Type> = Signal & { type: T };
 
-  export interface Base<T extends Type> {
-    readonly type: T;
-    resolve: () => any;
-  }
+  export type Collection = Signal[] | readonly Signal[];
 
-  export type SignalCollection = Signal[] | readonly Signal[];
-
-  export type ValidRequestFormat = Signal | SignalCollection | undefined;
-  export type Response<T extends ValidRequestFormat> = (
-    T extends SignalCollection ? SignalCollectionResponse<T> :
-    T extends Signal ? SignalResponse<T> : 
-    T
-  );
-
-  export type SignalResponse<T extends Signal> = (
-    T extends Signal.EntityInstantiation ? Entity : 
-    T extends Signal.EntityTransformation ? boolean :
-    T extends Signal.EntityDestruction ? boolean :
-    T extends Signal.ComponentInstantiation ? Component :
-    T extends Signal.ComponentDestruction ? boolean :
-    T extends Signal.SignalEmission<any, infer U> 
-      ? Signal.Emission.ClusterResponse<U> :
-    never
-  );
-
-  type SignalCollectionResponse<T extends SignalCollection> = { 
+  type CollectionResponse<T extends Collection> = { 
     [K in keyof T]: Response<T[K] & Signal>
   }
 
+  export type ValidRequestFormat = Signal | Collection | undefined;
+  export type Response<T extends ValidRequestFormat> = (
+    T extends Collection ? CollectionResponse<T> :
+    T extends Signal ? Response.PrebuildSignal<T> : 
+    T
+  );
+
+  export namespace Response {
+    export type PrebuildSignal<T extends Signal> = (
+      T extends Signal.EntityInstantiation ? Entity : 
+      T extends Signal.EntityTransformation ? boolean :
+      T extends Signal.EntityDestruction ? boolean :
+      T extends Signal.ComponentInstantiation ? Component :
+      T extends Signal.ComponentDestruction ? boolean :
+      T extends Signal.SignalEmission<any, infer U> 
+        ? Signal.Emission.ClusterResponse<U> :
+      never
+    );
+  }
+
   export namespace Emission {
-    export namespace MethodInitializations {
+    export type MethodInitialization = MethodInitialization.InstantaneousResponse | MethodInitialization.SequentialResponse;
+    export namespace MethodInitialization {
       interface BaseResponse {
         readonly component: Component;
-        readonly method: Component.ActionMethods.Instantaneous;
+        readonly method: Component.SignalMethod.Instantaneous;
       }
 
       export interface InstantaneousResponse extends BaseResponse {
@@ -720,15 +647,13 @@ export namespace Signal {
       } 
       
       export interface SequentialResponse extends BaseResponse {
-        readonly generator: Generator<Component.ActionMethods.Sequential.YieldRequest, unknown, unknown>;
+        readonly generator: Generator<Component.SignalMethod.Sequential.YieldRequest, unknown, unknown>;
       }
     }
     
-    export type MethodInitialization = MethodInitializations.InstantaneousResponse | MethodInitializations.SequentialResponse;
-
     export interface SegmentResponse<T = any> {
       readonly component: Component;
-      readonly method: Component.ActionMethod;
+      readonly method: Component.SignalMethod;
       readonly result: T;
     }
 
@@ -744,6 +669,11 @@ export namespace Signal {
   export type Creator<T extends Signal> = Omit<T, 'resolve' | 'onResolution'>;
   export type CreatorOrigin<T extends Creator<Signal>> = T extends Creator<infer U> ? U : never;
 
+  export interface Base<T extends Type> {
+    readonly type: T;
+    resolve: () => any;
+  }
+  
   export interface EntityInstantiation extends Signal.Base<Signal.Type.EntityInstantiation> {
     readonly origin?: Entity;
   }
@@ -757,12 +687,12 @@ export namespace Signal {
     readonly parent?: Entity | null | undefined;
   }
 
-  export interface ComponentInstantiation<T extends ComponentConstructor = ComponentConstructor> extends Signal.Base<Signal.Type.ComponentInstantiation> {
+  export interface ComponentInstantiation<T extends Component.Constructor = Component.Constructor> extends Signal.Base<Signal.Type.ComponentInstantiation> {
     readonly componentConstructor: T;
     readonly entity: Entity;
   }
 
-  export interface ComponentDestruction<T extends ComponentConstructor = ComponentConstructor> extends Signal.Base<Signal.Type.ComponentDestruction> {
+  export interface ComponentDestruction<T extends Component.Constructor = Component.Constructor> extends Signal.Base<Signal.Type.ComponentDestruction> {
     readonly componentConstructor: T;
     readonly entity: Entity;
   }

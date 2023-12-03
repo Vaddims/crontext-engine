@@ -127,10 +127,16 @@ export function perpendicularProjection(shape: Shape, axis: Vector) {
 
 declare global {
   interface Math {
-    avarage: (...numbers: number[]) => number;
+    avarage(...numbers: number[]): number;
+    baseLog(x: number, y: number): number;
   }
 }
 
 Math.avarage = function (...avarage: number[]) {
   return avarage.reduce((sum, number) => sum + number, 0) / avarage.length;
+}
+
+
+Math.baseLog = function (x: number, y: number) {
+  return Math.log(y) / Math.log(x);
 }
