@@ -1,5 +1,5 @@
 import { Transformator } from "objectra";
-import { Component, EntityTransform, Scene, Transform, Vector } from "../core";
+import { Component, EntityTransform, Renderer, Scene, Transform, Vector } from "../core";
 import { Color } from "../core/color";
 import { Shape } from "../core/shape";
 import { Rectangle } from "../shapes/rectangle";
@@ -7,6 +7,8 @@ import BuildinComponent from "../core/buildin-component";
 import { TickMemoizationPlugin } from "../core/cache/plugins/tick-memoization.capl";
 import { SpatialPartition } from "../core/spatial-partition/spatial-partition";
 import { SpatialPartitionCluster } from "../core/spatial-partition/spatial-partition-cluster";
+import { Gizmos } from "../core/gizmos";
+import { BoundingBox } from "../shapes/bounding-box";
 
 export enum LocalCacheKey {
   /** Instance based cache for vertices */
@@ -21,6 +23,11 @@ export enum LocalCacheKey {
 export class MeshRenderer extends BuildinComponent {
   public shape: Shape = new Rectangle();
   public color: Color = Color.black;
+  public opacity = 1;
+
+  public outlineColor: Color = Color.black;
+  public outlineWidth = 0;
+  public outlineOpacity = 0;
 
   [Component.onAwake]() {
     this.cacheManager.controller[LocalCacheKey.RVP].setPlugin(new TickMemoizationPlugin(() => (

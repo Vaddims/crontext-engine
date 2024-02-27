@@ -11,6 +11,8 @@ import { Component, Engine, Entity, Ray, Shape, Space, Transform } from "../core
 import { Circle, Rectangle } from "../shapes";
 import { BoundingBox } from "../shapes/bounding-box";
 import { rotatedOffsetPosition } from "../utils";
+import { SpatialPartition } from "../core/spatial-partition/spatial-partition";
+import { MediaRenderer } from "../components";
 
 export class SimulationInspectorRenderer extends Renderer {
   public readonly inspector: SimulationInspector;
@@ -190,7 +192,7 @@ export class SimulationInspectorRenderer extends Renderer {
     renderingPipeline.renderMeshMarkup(this.canvasSize);
     
     const bounds = this.getBounds(renderer);
-    const spatialPartition = this.simulation.scene.cache[MeshRenderer.CacheKey.MRSP];
+    const spatialPartition = <SpatialPartition<MeshRenderer>>this.simulation.scene.cache[MeshRenderer.CacheKey.MRSP];
     const boundingBoxViewportTraceMeshRenderers = spatialPartition.getBoundingBoxHeightTraceElements(bounds);
 
     const viewportMeshRenderers = new Set<MeshRenderer>();
@@ -202,13 +204,13 @@ export class SimulationInspectorRenderer extends Renderer {
       viewportMeshRenderers.add(meshRenderer);
     }
 
-    for (const viewportMeshRenderer of viewportMeshRenderers) {
-      renderingPipeline.renderEntityMesh(viewportMeshRenderer);
+    // Todo render by z index
+    for (const entity of renderer.simulation.scene.getComponentsOfType(MediaRenderer)) {
+      renderingPipeline.renderEntityMedia(entity);
     }
 
-    for (const branch of spatialPartition) {
-      const bounds = branch.cluster.getSpaceBounds();
-      gizmos.highlightVertices(bounds.vertices, new Color(0, 0, 255, 0.1));
+    for (const viewportMeshRenderer of viewportMeshRenderers) {
+      renderingPipeline.renderEntityMesh(viewportMeshRenderer);
     }
 
     for (const component of scene.getComponents()) {
@@ -232,18 +234,8 @@ export class SimulationInspectorRenderer extends Renderer {
     if (selectedEntities.size > 0) {
       renderingPipeline.renderEntityTransformControls(this.inspector);
     }
-    
-    // for (const meshRenderer of boundingBoxViewportTraceMeshRenderers) {
-    //   gizmos.highlightVertices(meshRenderer.relativeVerticesPosition(), Color.red);
-    // }
-
-    // for (const viewportMeshRenderer of viewportMeshRenderers) {
-    //   gizmos.highlightVertices(viewportMeshRenderer.relativeVerticesPosition(), Color.green);
-    // }
 
     context.restore();
-
-    // renderingPipeline.renderFixedPerformanceBar(Engine.fps);
   }
 
   public get simulation() {

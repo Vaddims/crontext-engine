@@ -12,3 +12,4 @@ export * from './light-sources/spot-light';
 export * from './gravity';
 export * from './gravities/point-gravity';
 export * from './gravities/directional-gravity';
+export * from './media-renderer';

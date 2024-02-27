@@ -17,6 +17,7 @@ export class PolygonCollider extends Collider {
   public readonly shape = new Rectangle();
 
   public [Component.onAwake]() {
+    super[Component.onAwake]();
     this.entity.cacheManager.controller[CacheKey.PCRVP].setPlugin(new MemoizationPlugin(() => (
       this.shape.withTransform(Transform.setRotation(this.transform.rotation).setScale(this.transform.scale).setPosition(this.transform.position))
     )));
@@ -88,6 +89,7 @@ export class PolygonCollider extends Collider {
   }
 
   public [Component.onGizmosRender](gizmos: Gizmos) {
+    super[Component.onGizmosRender](gizmos);
     const scene = this.entity.scene!;
     const colliderRelativeShape = this.relativeShape();
     const rShapeB = this.shape.bounds.withTransform(this.transform.toPureTransform().setRotation(0).setRotation(this.transform.rotation));
@@ -114,17 +116,18 @@ export class PolygonCollider extends Collider {
       }
     }
 
-    for (const collision of this.cache.collisions) {
-      gizmos.renderFixedDisk(collision.contacts[0], .1, Color.green);
-      gizmos.renderFixedCircle(collision.contacts[0], .1, Color.black);
-      if (collision.contacts[1]) {
-        gizmos.renderFixedDisk(collision.contacts[1], .1, Color.green);
-        gizmos.renderFixedCircle(collision.contacts[1], .1, Color.black);
-      }
-    }
+    // for (const collision of this.cache.collisions) {
+    //   gizmos.renderFixedDisk(collision.contacts[0], .1, Color.green);
+    //   gizmos.renderFixedCircle(collision.contacts[0], .1, Color.black);
+    //   if (collision.contacts[1]) {
+    //     gizmos.renderFixedDisk(collision.contacts[1], .1, Color.green);
+    //     gizmos.renderFixedCircle(collision.contacts[1], .1, Color.black);
+    //   }
+    // }
   }
 
   public [EntityTransform.onChange]() {
+    super[EntityTransform.onChange]();
     delete this.entity.cache[CacheKey.PCRVP];
   }
 

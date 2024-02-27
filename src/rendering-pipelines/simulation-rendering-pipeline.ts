@@ -7,6 +7,7 @@ import { Optic } from "../core/optic";
 import { rotatedOffsetPosition } from "../utils/crontext-math";
 import { Color, Transform } from "../core";
 import { Rectangle } from "../shapes";
+import { MediaRenderer } from "../components";
 
 interface RadialGradientColorStop {
   offset: number;
@@ -68,7 +69,10 @@ export class SimulationRenderingPipeline<T extends SimulationRenderer = Simulati
 
     const opticRotation = this.optic.rotation;
     const transformedShape = shape.withTransform(Transform.setRotation(rotation - opticRotation).setScale(scale));
-    this.renderShape(transformedShape, position, opticRotation, color);
+    this.context.save();
+    this.renderShape(transformedShape, position, opticRotation, new Color(color.red, color.green, color.blue, color.alpha * meshRenderer.opacity));
+    this.outlineShape(transformedShape.withOffset(position), new Color(meshRenderer.outlineColor.red, meshRenderer.outlineColor.green, meshRenderer.outlineColor.blue, meshRenderer.outlineColor.alpha * meshRenderer.outlineOpacity));
+    this.context.restore();
   }
 
   public renderLine(pivot: Vector, end: Vector, color: Color, width = 2) {
@@ -89,6 +93,30 @@ export class SimulationRenderingPipeline<T extends SimulationRenderer = Simulati
     context.lineJoin = context.lineCap = 'round';
     context.stroke();
     context.restore();
+  }
+
+  public renderEntityMedia(mediaRenderer: MediaRenderer) {
+    const { position, rotation, scale } = mediaRenderer.entity.transform;
+
+    const opticRotation = this.optic.rotation;
+    const renderingPosition = this.getRenderingPosition(position);
+    const renderingScale = scale.multiply(this.optic.scaledPixelsPerUnit());
+
+
+
+    this.context.save();
+    this.context.translate(...renderingPosition.raw);
+    this.context.rotate(opticRotation - rotation);
+
+    const imageSize = new Vector(mediaRenderer.image.width, mediaRenderer.image.height);
+    const sceneRelativeSize = mediaRenderer.referenceSize === 'unit' ? imageSize.divide(Math.max(...imageSize.raw)) : imageSize;
+    const renderSize = sceneRelativeSize.multiply(renderingScale);
+
+    this.context.drawImage(mediaRenderer.image, -renderSize.x / 2, -renderSize.y / 2, renderSize.x, renderSize.y);
+
+
+    // this.context.drawImage(mediaRenderer.image, -width * renderingScale.x / 2, -height * renderingScale.y / 2, width * renderingScale.x, height * renderingScale.y);
+    this.context.restore();
   }
 
   public renderDirectionalLine(pivot: Vector, direction: Vector, color: Color, width = 2) {

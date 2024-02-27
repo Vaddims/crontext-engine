@@ -14,15 +14,19 @@ import { BoundingBox } from "../shapes/bounding-box";
 import { getBaseLog } from "../utils";
 import { Transformator } from "objectra";
 import BuildinComponent from "../core/buildin-component";
+import { Collider } from "./collider";
+import { MediaRenderer } from "./media-renderer";
 
 // TODO NOT TO RENDER UNEEDED ENTITIES LIKE IN GIZMOS EXAMPLE
 @Transformator.Register()
 export class Camera extends BuildinComponent {
+  public shouldRender = true;
   public readonly layerMask: Layer[] = [Layer.camera];
   public canvasRelativePosition = Vector.zero;
   public canvasRelativeSize = Vector.one;
 
   public background = Color.white;
+  public backgroundOpacity = 1;
 
   @Transformator.Exclude()
   protected viewportMeshRenderers = new Set<MeshRenderer>();
@@ -31,6 +35,10 @@ export class Camera extends BuildinComponent {
   protected boundingBoxViewportTraceMeshRenderers = new Set<MeshRenderer>();
 
   render(renderer: SimulationRenderer) {
+    if (!this.shouldRender) {
+      return;
+    }
+
     const { context, canvasSize } = renderer;
     const optic = this.toOptic();
     optic.pixelsPerUnit = renderer.pixelsPerUnit;
@@ -46,14 +54,15 @@ export class Camera extends BuildinComponent {
     context.closePath();
     context.clip();
 
-    context.fillStyle = this.background.toString();
+    context.clearRect(...cameraPixelPosition.raw, ...cameraPixelSize.raw);
+
+    context.fillStyle = this.background.withAlpha(this.backgroundOpacity).toString();
     context.fill();
 
     context.translate(...cameraPixelPosition.add(cameraPixelSize.divide(2)).raw);
 
     this.renderScene(renderer, renderingPipelineInstance);
     this.renderSceneLight(renderer, renderingPipelineInstance);
-
     
     context.restore();
   }
@@ -63,24 +72,24 @@ export class Camera extends BuildinComponent {
     gizmos.highlightVertices(bounds.vertices, Color.blue);
 
     const { scene } = this.entity;
-    const spatialPartition = scene.cache[MeshRenderer.CacheKey.MRSP];
+    const spatialPartition = scene.cache[Collider.CacheKey.CSP];
     for (const branch of spatialPartition) {
       const bounds = branch.cluster.getSpaceBounds();
       gizmos.highlightVertices(bounds.vertices, new Color(0, 0, 255, 0.1));
     }
 
-    const {
-      boundingBoxViewportTraceMeshRenderers,
-      viewportMeshRenderers,
-    } = this.viewportCullingMask(gizmos.renderer);
+    // const {
+    //   boundingBoxViewportTraceMeshRenderers,
+    //   viewportMeshRenderers,
+    // } = this.viewportCullingMask(gizmos.renderer);
 
-    for (const meshRenderer of boundingBoxViewportTraceMeshRenderers) {
-      gizmos.highlightVertices(meshRenderer.relativeVerticesPosition(), Color.red);
-    }
+    // for (const meshRenderer of boundingBoxViewportTraceMeshRenderers) {
+    //   gizmos.highlightVertices(meshRenderer.relativeVerticesPosition(), Color.red);
+    // }
 
-    for (const viewportMeshRenderer of viewportMeshRenderers) {
-      gizmos.highlightVertices(viewportMeshRenderer.relativeVerticesPosition(), Color.green);
-    }
+    // for (const viewportMeshRenderer of viewportMeshRenderers) {
+    //   gizmos.highlightVertices(viewportMeshRenderer.relativeVerticesPosition(), Color.green);
+    // }
   }
 
   protected viewportCullingMask(renderer: Renderer) {
@@ -116,6 +125,11 @@ export class Camera extends BuildinComponent {
     
     this.boundingBoxViewportTraceMeshRenderers = boundingBoxViewportTraceMeshRenderers;
     this.viewportMeshRenderers = viewportMeshRenderers;
+
+    // Todo render by z index
+    for (const entity of renderer.simulation.scene.getComponentsOfType(MediaRenderer)) {
+      renderingPipelineInstance.renderEntityMedia(entity);
+    }
 
     for (const meshRenderer of this.viewportMeshRenderers) {
       if (this.layerMask.some(layerMask => meshRenderer.entity.layers.has(layerMask))) {
