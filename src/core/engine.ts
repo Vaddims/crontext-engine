@@ -70,6 +70,10 @@ export class Engine {
     requestAnimationFrame(Engine.updateTick);
   }
 
+  public static fileUrlLoader: (path: string) => Promise<string | null> = async (path) => {
+    return path;
+  }; 
+
   static {
     Engine.init();
   }

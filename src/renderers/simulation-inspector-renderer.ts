@@ -1,4 +1,4 @@
-import { MeshRenderer } from "../components/mesh-renderer";
+import type { MeshRenderer } from "../components/mesh-renderer";
 import { SimulationInspectorRenderingPipeline } from "../rendering-pipelines/simulation-inspector-rendering-pipeline";
 import { Color } from "../core/color";
 import { Renderer } from "../core/renderer";
@@ -7,12 +7,15 @@ import { SimulationInspector, TransformMode } from "../simulations/simulation-in
 import { Vector } from "../core/vector";
 import { Camera } from "../components/camera";
 import { Gizmos } from "../core/gizmos";
-import { Component, Engine, Entity, Ray, Shape, Space, Transform } from "../core";
+import { Component, Engine, Entity, Optic, Ray, Shape, Space, Transform } from "../core";
 import { Circle, Rectangle } from "../shapes";
 import { BoundingBox } from "../shapes/bounding-box";
 import { rotatedOffsetPosition } from "../utils";
 import { SpatialPartition } from "../core/spatial-partition/spatial-partition";
 import { MediaRenderer } from "../components";
+
+const onGizmosSelectionRender = Symbol('SimulationInspectorRenderer:OnGizmosSelectionRender');
+
 
 export class SimulationInspectorRenderer extends Renderer {
   public readonly inspector: SimulationInspector;
@@ -81,8 +84,9 @@ export class SimulationInspectorRenderer extends Renderer {
       if (this.inspector.usingControls) {
         this.inspector.applyDeltaControls(lastMouseScenePosition, currentMouseScenePosition);
       } else {
-        const offset = this.lastKnownMousePosition.subtract(new Vector(event.offsetX, event.offsetY)).divide(window.devicePixelRatio);
-        this.inspector.handleOpticMovement(offset)
+        // ! OPTIC MOVEMENT
+        // const offset = this.lastKnownMousePosition.subtract(new Vector(event.offsetX, event.offsetY)).divide(window.devicePixelRatio);
+        // this.inspector.handleOpticMovement(offset)
       }
     }
   }
@@ -192,7 +196,7 @@ export class SimulationInspectorRenderer extends Renderer {
     renderingPipeline.renderMeshMarkup(this.canvasSize);
     
     const bounds = this.getBounds(renderer);
-    const spatialPartition = <SpatialPartition<MeshRenderer>>this.simulation.scene.cache[MeshRenderer.CacheKey.MRSP];
+    const spatialPartition = <SpatialPartition<MeshRenderer>>this.simulation.scene.cache["MeshRenderer:SpatialPartition"];
     const boundingBoxViewportTraceMeshRenderers = spatialPartition.getBoundingBoxHeightTraceElements(bounds);
 
     const viewportMeshRenderers = new Set<MeshRenderer>();
@@ -213,22 +217,10 @@ export class SimulationInspectorRenderer extends Renderer {
       renderingPipeline.renderEntityMesh(viewportMeshRenderer);
     }
 
-    for (const component of scene.getComponents()) {
-      component[Component.onGizmosRender]?.(gizmos);
-    }
-
     const { selectedEntities } = this.inspector;
-
-    for (const entity of selectedEntities) {
-      const meshRenderer = entity.components.find(MeshRenderer);
-
-      if (entity.components.find(Camera)) {
-        continue;
-      }
-
-      if (meshRenderer) {
-        renderingPipeline.highlightMesh(meshRenderer);
-      }
+    for (const component of scene.getComponents()) {
+      const componentIsShadowSelected = selectedEntities.has(component.entity);
+      component[Component.onGizmosRender]?.(gizmos, componentIsShadowSelected);
     }
 
     if (selectedEntities.size > 0) {
@@ -241,4 +233,13 @@ export class SimulationInspectorRenderer extends Renderer {
   public get simulation() {
     return this.inspector.simulation;
   }
+  
+  public getRenderingOpticCaptures(): [Renderer.OpticCapture] {
+    return [{
+      optic: this.inspector.optic,
+      payload: null,
+    }];
+  }
+
+  public static onGizmosSelectionRender: typeof onGizmosSelectionRender = onGizmosSelectionRender;
 }

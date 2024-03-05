@@ -74,11 +74,10 @@ export class SimulationInspectorRenderingPipeline extends SimulationRenderingPip
 
   public defineFixedShapePath(shape: Shape) {
     const { context } = this;
-
+    const { vertices } = shape.withoutOffset().withScale(this.optic.pixelsPerUnit);
+    
     context.beginPath();
-    const { vertices } = shape.withScale(this.optic.pixelsPerUnit);
     for (let i = 0; i < vertices.length; i++) {
-      // const vertex = vertices[i].multiply(this.optic.pixelsPerUnit);
       const vertex = vertices[i];
       if (i === 0) {
         context.moveTo(vertex.x, -vertex.y);

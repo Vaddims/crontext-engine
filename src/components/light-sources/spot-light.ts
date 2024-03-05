@@ -1,9 +1,9 @@
 import { Transformator } from "objectra";
-import { Color, Component, Ray, Shape, Transform, Vector } from "../../core";
+import { Color, Component, Ray, Renderer, Shape, Transform, Vector } from "../../core";
 import { Gizmos } from "../../core/gizmos";
 import { VisibilityPolygon } from "../../core/visibility-polygon";
 import { SectorVisibilityPolygon } from "../../core/visibility-polygons/sector-visibility-polygon";
-import { SimulationRenderer } from "../../renderers";
+import { SimulationInspectorRenderer, SimulationRenderer } from "../../renderers";
 import { SimulationRenderingPipeline } from "../../rendering-pipelines";
 import { Rectangle } from "../../shapes";
 import { Light } from "../light";
@@ -149,7 +149,7 @@ export class SpotLight extends Light {
     return escapeRayOpenStack.size !== 0;
   }
 
-  private getVisibilityPolygon(renderer: SimulationRenderer) {
+  private getVisibilityPolygon(renderer: Renderer) {
     const lightBounds = this.getBounds();    
     const entityShapes = this.getEntityShapes(lightBounds);
 

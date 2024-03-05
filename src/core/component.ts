@@ -133,7 +133,7 @@ export interface Component {
   [Component.onUpdate]?(): Component.SignalMethodResponse;
   [Component.onFixedUpdate]?(): Component.SignalMethodResponse;
   [Component.onDestroy]?(): Component.SignalMethodResponse;
-  [Component.onGizmosRender]?(gizmos: Gizmos): Component.SignalMethodResponse;
+  [Component.onGizmosRender]?(gizmos: Gizmos, isShadowSelected: boolean): Component.SignalMethodResponse;
   [Component.onCollision]?(collision: Collision<Collider>): Component.SignalMethodResponse;
 }
 

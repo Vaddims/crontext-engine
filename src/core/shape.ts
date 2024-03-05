@@ -112,6 +112,12 @@ export class Shape {
     return shape;
   }
 
+  public withoutOffset() {
+    const shape = this.withOffset(this.arithmeticMean().multiply(-1));
+    shape.originCenterOffsetFromArithmeticMean = this.originCenterOffsetFromArithmeticMean;
+    return shape;
+  }
+
   public withOffset(vector: Vector) {
     const vertices = this.vertices.map(vertex => vertex.add(vector));
     const shape = new Shape(vertices);

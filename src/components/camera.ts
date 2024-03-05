@@ -1,4 +1,4 @@
-import { Component, Entity, Renderer, Shape } from "../core";
+import { Component, Entity, Ray, Renderer, Shape } from "../core";
 import { Color } from "../core/color";
 import { Optic } from "../core/optic";
 import { SimulationRenderer } from "../renderers/simulation-renderer";
@@ -65,6 +65,13 @@ export class Camera extends BuildinComponent {
     this.renderSceneLight(renderer, renderingPipelineInstance);
     
     context.restore();
+  }
+
+  public isScreenPointInCamera(screenPoint: Vector, renderer: SimulationRenderer) {
+    const sceneCoordinates = renderer.canvasPointToCoordinates(this.toOptic(), screenPoint);
+    const bounds = this.getBounds(renderer);
+    const isInsideBoundaries = Ray.isPointInsideShape(bounds, sceneCoordinates);
+    return isInsideBoundaries;
   }
 
   public [Component.onGizmosRender](gizmos: Gizmos) {

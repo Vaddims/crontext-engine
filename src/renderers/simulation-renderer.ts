@@ -1,5 +1,5 @@
 import { Camera } from "../components/camera";
-import { Engine } from "../core";
+import { Engine, Optic, Vector } from "../core";
 import { Renderer } from "../core/renderer";
 import { Simulation } from "../simulations/simulation";
 
@@ -34,5 +34,32 @@ export class SimulationRenderer extends Renderer {
     }
 
     context.restore();
+  }
+
+  public getRenderingOpticCaptures(position: Vector): Renderer.OpticCapture<SimulationRenderer.OpticCapturePayload>[] {
+    const sceneCameras = this.simulation.scene.getComponentsOfType(Camera);
+
+    const opticInformation: Renderer.OpticCapture<SimulationRenderer.OpticCapturePayload>[] = [];
+
+    for (const camera of sceneCameras) {
+      if (!camera.isScreenPointInCamera(position, this)) {
+        continue;
+      }
+
+      opticInformation.push({
+        optic: camera.toOptic(),
+        payload: {
+          camera
+        },
+      });
+    }
+
+    return opticInformation;
+  }
+}
+
+export namespace SimulationRenderer {
+  export interface OpticCapturePayload {
+    readonly camera: Camera;
   }
 }

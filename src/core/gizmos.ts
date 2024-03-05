@@ -4,6 +4,7 @@ import { Rectangle } from "../shapes";
 import { Color } from "./color";
 import { Entity } from "./entity";
 import { Renderer } from "./renderer";
+import { Shape } from "./shape";
 import { Vector } from "./vector";
 
 export class Gizmos {
@@ -69,5 +70,13 @@ export class Gizmos {
 
   public renderStaticText(fulcrum: Vector, text: string, size = 2, color = Color.black) {
     this.renderingPipeline.renderStaticText(fulcrum, text, size, color);
+  }
+
+  public renderShape(shape: Shape, center: Vector = Vector.zero, rotation: number = 0, color: Color = Color.yellow) {
+    this.renderingPipeline.renderShape(shape, center, rotation, color);
+  }
+
+  public renderFixedShape(shape: Shape, color = Color.red) {
+    this.renderingPipeline.renderFixedShape(shape, color);
   }
 }

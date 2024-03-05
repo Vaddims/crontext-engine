@@ -5,7 +5,7 @@ import { Shape } from "../core/shape";
 import { Vector } from "../core/vector";
 import { Optic } from "../core/optic";
 import { rotatedOffsetPosition } from "../utils/crontext-math";
-import { Color, Transform } from "../core";
+import { Color, Renderer, Transform } from "../core";
 import { Rectangle } from "../shapes";
 import { MediaRenderer } from "../components";
 
@@ -14,7 +14,7 @@ interface RadialGradientColorStop {
   color: Color;
 }
 
-export class SimulationRenderingPipeline<T extends SimulationRenderer = SimulationRenderer> extends RenderingPipeline<T> {
+export class SimulationRenderingPipeline<T extends Renderer = SimulationRenderer> extends RenderingPipeline<T> {
   public readonly context: CanvasRenderingContext2D;
   public readonly optic: Optic;
 
@@ -64,14 +64,11 @@ export class SimulationRenderingPipeline<T extends SimulationRenderer = Simulati
   }
 
   public renderEntityMesh(meshRenderer: MeshRenderer) {
-    const { entity, shape, color } = meshRenderer;
-    const { position, rotation, scale } = entity.transform;
-
-    const opticRotation = this.optic.rotation;
-    const transformedShape = shape.withTransform(Transform.setRotation(rotation - opticRotation).setScale(scale));
+    const { color } = meshRenderer;
+    const transformedShape = meshRenderer.getEntityTransformedShape()
     this.context.save();
-    this.renderShape(transformedShape, position, opticRotation, new Color(color.red, color.green, color.blue, color.alpha * meshRenderer.opacity));
-    this.outlineShape(transformedShape.withOffset(position), new Color(meshRenderer.outlineColor.red, meshRenderer.outlineColor.green, meshRenderer.outlineColor.blue, meshRenderer.outlineColor.alpha * meshRenderer.outlineOpacity));
+    this.renderShape(transformedShape, Vector.zero, 0, new Color(color.red, color.green, color.blue, color.alpha * meshRenderer.opacity));
+    this.outlineShape(transformedShape, new Color(meshRenderer.outlineColor.red, meshRenderer.outlineColor.green, meshRenderer.outlineColor.blue, meshRenderer.outlineColor.alpha * meshRenderer.outlineOpacity));
     this.context.restore();
   }
 

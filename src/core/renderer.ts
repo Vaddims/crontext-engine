@@ -66,4 +66,24 @@ export abstract class Renderer {
   public get pixelRatio() {
     return this.canvasSize.divide(this.canvasSize.y) // TODO Change axis to dependent
   }
+
+  public abstract getRenderingOpticCaptures(position: Vector): Renderer.OpticCapture<unknown>[];
+}
+
+export namespace Renderer {
+  export namespace PointOpticInformation {
+    export interface Pure {
+      readonly optic: Optic;
+    }
+
+    export interface WithPayload<P> {
+      readonly optic: Optic;
+      readonly payload: P;
+    }
+  }
+
+  export type OpticCapture<P = null> = {
+    readonly optic: Optic;
+    readonly payload: P;
+  }
 }
