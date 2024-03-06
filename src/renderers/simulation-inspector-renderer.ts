@@ -7,7 +7,7 @@ import { SimulationInspector, TransformMode } from "../simulations/simulation-in
 import { Vector } from "../core/vector";
 import { Camera } from "../components/camera";
 import { Gizmos } from "../core/gizmos";
-import { Component, Engine, Entity, Optic, Ray, Shape, Space, Transform } from "../core";
+import { Component, Engine, Entity, Input, Optic, Ray, Shape, Space, Transform } from "../core";
 import { Circle, Rectangle } from "../shapes";
 import { BoundingBox } from "../shapes/bounding-box";
 import { rotatedOffsetPosition } from "../utils";
@@ -41,13 +41,28 @@ export class SimulationInspectorRenderer extends Renderer {
       canvas.addEventListener('wheel', this.safariWheelHandler.bind(this));
     } else {
       canvas.addEventListener('wheel', this.wheelHandler.bind(this));
-      canvas.addEventListener('mousemove', this.mouseHandler.bind(this));
+      // canvas.addEventListener('mousemove', this.mouseHandler.bind(this));
     }
 
-    canvas.addEventListener('mousemove', this.mousePositionHandler.bind(this));
-    canvas.addEventListener('mousedown', this.mouseDownHandler.bind(this));
-    canvas.addEventListener('mouseup', this.mouseUpHandler.bind(this));
+    // canvas.addEventListener('mousemove', this.mousePositionHandler.bind(this));
+    // canvas.addEventListener('mousedown', this.mouseDownHandler.bind(this));
+    // canvas.addEventListener('mouseup', this.mouseUpHandler.bind(this));
     canvas.addEventListener('keydown', this.keypressHandler.bind(this));
+  }
+
+  public [Input.onMouseDown](event: MouseEvent) {
+    // console.log('down')
+    this.mouseDownHandler(event);
+  }
+
+  public [Input.onMouseUp](event: MouseEvent) {
+    // console.log('up')
+    this.mouseUpHandler(event);
+  }
+
+  public [Input.onMouseMove](event: MouseEvent) {
+    // console.log('move')
+    this.mouseHandler(event);
   }
 
   public keypressHandler(event: KeyboardEvent) {
@@ -75,7 +90,7 @@ export class SimulationInspectorRenderer extends Renderer {
 
   protected mouseHandler(event: MouseEvent) {
     this.mouseMovedWhileClicked = true;
-
+    
     const currentMousePosition = new Vector(event.offsetX, event.offsetY);
     const lastMouseScenePosition = this.canvasPointToCoordinates(this.inspector.optic, this.lastKnownMousePosition);
     const currentMouseScenePosition = this.canvasPointToCoordinates(this.inspector.optic, currentMousePosition);
@@ -84,11 +99,12 @@ export class SimulationInspectorRenderer extends Renderer {
       if (this.inspector.usingControls) {
         this.inspector.applyDeltaControls(lastMouseScenePosition, currentMouseScenePosition);
       } else {
-        // ! OPTIC MOVEMENT
-        // const offset = this.lastKnownMousePosition.subtract(new Vector(event.offsetX, event.offsetY)).divide(window.devicePixelRatio);
-        // this.inspector.handleOpticMovement(offset)
+        const offset = this.lastKnownMousePosition.subtract(new Vector(event.offsetX, event.offsetY)).divide(window.devicePixelRatio);
+        this.inspector.handleOpticMovement(offset)
       }
     }
+
+    this.lastKnownMousePosition = currentMousePosition;
   }
 
   protected mouseDownHandler(event: MouseEvent) {

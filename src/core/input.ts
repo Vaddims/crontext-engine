@@ -7,6 +7,7 @@ import { Renderer } from "./renderer";
 import { Optic } from "./optic";
 import type { SimulationInspectorRenderer } from "../renderers";
 import type { Entity } from "./entity";
+import { Signal } from "./scene";
 
 export class Input {
   private static initiated = false;
@@ -96,6 +97,7 @@ export class Input {
     const composedCaptures = [...captures] as any;
     composedCaptures.fromInspector = captures.filter(capture => capture.renderer.constructor.name === 'SimulationInspectorRenderer');
     composedCaptures.mostRelevantInspector = composedCaptures.fromInspector[0] ?? null;
+    composedCaptures.lockInspectorViewTransformation = false;
     composedCaptures.isSelectedAtInspector = (capture: Input.Mouse.Capture, entity: Entity) => {
       if (capture.renderer.constructor.name !== 'SimulationInspectorRenderer') {
         return false;
@@ -108,6 +110,14 @@ export class Input {
   }
 
   private static addMouseEventListeners() {
+    const callRendererInputActions = (renderer: Renderer, symbol: Symbol, event: MouseEvent, captures: Input.Mouse.Captures) => {
+      if (!(renderer as any)[symbol as any]) {
+        return;
+      }
+
+      (renderer as any)[symbol as any](event, captures);
+    }
+
     const handleMouseClick = (symbol: symbol, event: MouseEvent) => {
       if (!event.target) {
         return;
@@ -124,7 +134,11 @@ export class Input {
 
       renderer.simulation.scene.emitSignal(symbol, {
         args: [event, captures],
-      });
+      }).resolve();
+
+      if (!captures.lockInspectorViewTransformation) {
+        callRendererInputActions(renderer, symbol, event, captures);
+      }
     }
 
     const handleMouseEvent = (symbol: symbol, event: MouseEvent) => {
@@ -136,7 +150,11 @@ export class Input {
         const captures = Input.createCaptures(event, renderer);        
         renderer.simulation.scene.emitSignal(symbol, {
           args: [event, captures],
-        });
+        }).resolve();
+
+        if (!captures.lockInspectorViewTransformation) {
+          callRendererInputActions(renderer, symbol, event, captures);
+        }
       })
     }
 
@@ -183,7 +201,7 @@ export namespace Input {
   export type MouseEventResolution = Map<Camera, Input.Mouse.ActionEvent>;
   export interface ComponentActions {
     [Input.onMouseClick]?(event: MouseEvent, captures: Input.Mouse.Captures): Component.SignalMethodResponse;
-    [Input.onMouseDown]?(event: MouseEvent, captures: Input.Mouse.Captures): Component.SignalMethodResponse;
+    [Input.onMouseDown]?(event: MouseEvent, captures: Input.Mouse.Captures): Component.SignalMethodResponse<any>;
     [Input.onMouseUp]?(event: MouseEvent, captures: Input.Mouse.Captures): Component.SignalMethodResponse;
     [Input.onMouseMove]?(event: MouseEvent, captures: Input.Mouse.Captures): Component.SignalMethodResponse;
   }
@@ -216,6 +234,7 @@ export namespace Input {
       readonly fromInspector: Capture<SimulationInspectorRenderer>[];
       readonly mostRelevantInspector: Capture<SimulationInspectorRenderer> | null;
       readonly isSelectedAtInspector: (capture: Capture, entity: Entity) => boolean;
+      lockInspectorViewTransformation: boolean;
     };
   } 
 }

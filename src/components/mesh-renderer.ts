@@ -174,11 +174,12 @@ export class MeshRenderer extends BuildinComponent implements Input.ComponentAct
         this.shapeTransformSelectedAnchor = i;
 
         this.transformOffsetFromTransformCenter = (<Shape>this.cache.transformationAnchors[i]).arithmeticMean().subtract(captureInScenePosition);
+        captures.lockInspectorViewTransformation = true;
       }
     }
   }
 
-  public [Input.onMouseMove](event: MouseEvent, captures: Input.Mouse.Captures) {
+  public [Input.onMouseMove](event: MouseEvent, captures: Input.Mouse.Captures): any {
     if (!captures.mostRelevantInspector) {
       return;
     }
@@ -193,12 +194,18 @@ export class MeshRenderer extends BuildinComponent implements Input.ComponentAct
 
       this.transform.position = newBoxPosition;
       this.transform.scale = Vector.abs(newBoxScale);
+
+      captures.lockInspectorViewTransformation = true;
     }
   }
 
-  public [Input.onMouseUp](event: MouseEvent, captures: Input.Mouse.Captures) {
-    this.lastTransformMousePosition = null;
-    this.shapeTransformSelectedAnchor = null;
+  public [Input.onMouseUp](event: MouseEvent, captures: Input.Mouse.Captures): any {
+    if (this.lastTransformMousePosition || this.shapeTransformSelectedAnchor !== null) {
+      this.lastTransformMousePosition = null;
+      this.shapeTransformSelectedAnchor = null;
+
+      captures.lockInspectorViewTransformation = true;
+    }
   }
   
 

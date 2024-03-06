@@ -154,7 +154,11 @@ export class Scene implements Iterable<Entity> {
   }
 
   private resolvePrimitiveSignal(signal: Signal) {
-    const resolver = Scene.signalResolver.get(signal.type)!;
+    const resolver = Scene.signalResolver.get(signal.type);
+    if (!resolver) {
+      throw new Error(`Resolver not found for signal type (${Signal.Type[signal.type]})`)
+    }
+
     return resolver.call(this, signal);
   }
 
@@ -174,7 +178,9 @@ export class Scene implements Iterable<Entity> {
       this.signals.push(...cachedSignals);
 
       if (!this.signalResult.has(signal)) {
-        throw new Error('internal');
+        // TODO RESEE
+        // throw new Error(`Signal result is not found for (${Signal.Type[signal.type]})`);
+        return undefined;
       }
     
       const res = this.signalResult.get(signal);
@@ -210,7 +216,7 @@ export class Scene implements Iterable<Entity> {
     const signalEmissionFinishQuantity = new Map<Signal.SignalEmission, number>();
     
     const signalEmissionGeneratorMap = new Map<Signal.SignalEmission, AnyGenerator[]>();
-    const signalResultMap = new Map<Signal, any>(); // Results for each requested action request
+    const signalResultMap = new Map<Signal, Signal.Emission.SegmentResponse<any>[]>(); // Results for each requested signal request
     const signalEmissionResponses = new Map<Signal.SignalEmission, Signal.Emission.SegmentResponse[]>();
 
     const addSignalResultSegment = (signal: Signal.SignalEmission, emissionExecutionResult: Signal.Emission.SegmentResponse) => {
@@ -238,7 +244,6 @@ export class Scene implements Iterable<Entity> {
       // Use array.from to prevent the loop from behaving unexpectly because of `currentGeneratorExecutions` mutations
 
       for (const executionGenerator of Array.from(currentGeneratorExecutions)) {
-        // resolveGeneratorIteration(executionGenerator);
         const result = resolveGeneratorIteration(executionGenerator);
 
         // Resolve all added action requests
@@ -310,7 +315,11 @@ export class Scene implements Iterable<Entity> {
           return;
         }
   
-        const allChildrenExecutionsResolved = Array.from(currentGeneratorExecutions).every(execution => generatorParentMap.get(execution) !== generatorParent);
+        const allChildrenExecutionsResolved = Array.from(
+          currentGeneratorExecutions
+        ).every(
+          execution => generatorParentMap.get(execution) !== generatorParent
+        );
   
         if (!allChildrenExecutionsResolved) {
           return;
@@ -671,7 +680,7 @@ export namespace Signal {
 
   export interface Base<T extends Type> {
     readonly type: T;
-    resolve: () => any;
+    resolve: () => unknown;
   }
   
   export interface EntityInstantiation extends Signal.Base<Signal.Type.EntityInstantiation> {
