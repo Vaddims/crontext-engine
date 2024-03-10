@@ -45,6 +45,22 @@ export class SimulationRenderingPipeline<T extends Renderer = SimulationRenderer
     context.closePath();
   }
 
+  public uni_defineShapePath(shape: Shape) {
+    const { context } = this;
+
+    context.beginPath();
+    const { vertices } = shape.withoutOffset().withScale(this.optic.scaledPixelsPerUnit());
+    for (let i = 0; i < vertices.length; i++) {
+      const vertex = vertices[i];
+      if (i === 0) {
+        context.moveTo(vertex.x, -vertex.y);
+        continue;
+      }
+      context.lineTo(vertex.x, -vertex.y);
+    }
+    context.closePath();
+  }
+
   public renderShape(shape: Shape, position: Vector, opticRotation: number, color: Color) {
     const { context } = this;
 

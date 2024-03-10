@@ -8,8 +8,8 @@ import { TickMemoizationPlugin } from "../core/cache/plugins/tick-memoization.ca
 import { SpatialPartition } from "../core/spatial-partition/spatial-partition";
 import { SpatialPartitionCluster } from "../core/spatial-partition/spatial-partition-cluster";
 import { Gizmos } from "../core/gizmos";
-import { BoundingBox } from "../shapes/bounding-box";
 import { TickRestorePlugin } from "../core/cache/plugins/tick-restore.capl";
+import { SimulationInspectorRenderer } from "../renderers";
 
 export enum LocalCacheKey {
   /** Instance based cache for vertices */
@@ -133,19 +133,43 @@ export class MeshRenderer extends BuildinComponent implements Input.ComponentAct
 
     const vertices = this.relativeVerticesPosition();
 
-    gizmos.highlightVertices(vertices, Color.yellow);
+    gizmos.highlightVertices(vertices, gizmos.colorPallete.selectedOutline);
 
-    const o = gizmos.renderer.inspector.optic;
+    const optic = gizmos.renderer.inspector.optic;
     if (this.shape instanceof Rectangle) {
       const ets = this.getEntityTransformedShape();
       const anchors: Shape[] = [];
+      const ANCHOR_SCALE = .3;
       for (let i = 0; i < ets.vertices.length; i++) {
-        const fixedAnchor = new Rectangle().withScale(.25).withOffset(ets.vertices[i]).withScale(o.scale)
+        const fixedAnchor = new Rectangle().withScale(ANCHOR_SCALE).withOffset(ets.vertices[i]).withScale(optic.scale)
         anchors.push(fixedAnchor);
       }
 
+      if (this.color.alpha < .5 || this.opacity < .5) {
+        gizmos.uni_renderShape(ets, gizmos.colorPallete.selectedOutline.withAlpha(0.2));
+      }
+
+      if (this.shapeTransformSelectedAnchor !== null) {
+        const anchor = anchors[this.shapeTransformSelectedAnchor];
+        gizmos.renderFixedDisk(anchor.arithmeticMean(), ANCHOR_SCALE / 2, gizmos.colorPallete.selectedAccessories);
+        gizmos.renderFixedCircle(anchor.arithmeticMean(), ANCHOR_SCALE / 2, Color.white);
+        this.cache.transformationAnchors = anchors;
+        return;
+      }
+
+      const mustFitInLine = 3;
+      const a = ets.vertices[0].subtract(ets.vertices[1]);
+      const b = ets.vertices[1].subtract(ets.vertices[2]);
+      const min = Vector.min(a, b)
+      const shouldRenderAnchors = min.magnitude >= anchors[0].getScale().x * (mustFitInLine - 1); // divide by 2 because the anchor is offseted by half of its scale
+
+      if (!shouldRenderAnchors) {
+        return;
+      }
+
       for (const anchor of anchors) {
-        gizmos.renderShape(new Rectangle().withScale(anchor.getScale()), anchor.arithmeticMean(), 0, Color.red);
+        gizmos.renderFixedDisk(anchor.arithmeticMean(), ANCHOR_SCALE / 2, gizmos.colorPallete.selectedAccessories);
+        gizmos.renderFixedCircle(anchor.arithmeticMean(), ANCHOR_SCALE / 2, Color.white);
       }
 
       this.cache.transformationAnchors = anchors;
@@ -156,58 +180,111 @@ export class MeshRenderer extends BuildinComponent implements Input.ComponentAct
   public shapeTransformSelectedAnchor: number | null = null;
   public lastTransformMousePosition: Vector | null = null;
 
-  public [Input.onMouseDown](event: MouseEvent, captures: Input.Mouse.Captures) {
-    if (!captures.mostRelevantInspector) {
+  public [Input.onMouseDown](interaction: Input.Mouse.Interaction) {
+    const { captures, renderer } = interaction;
+
+    if (!this.cache.transformationAnchors) {
       return;
     }
 
-    if (!captures.isSelectedAtInspector(captures.mostRelevantInspector, this.entity)) {
+    if (renderer.constructor.name !== 'SimulationInspectorRenderer') {
+      return;
+    }
+    
+    const inspectorRenderer = <SimulationInspectorRenderer>renderer;
+    if (!inspectorRenderer.inspector.selectedEntities.has(this.entity)) {
       return;
     }
 
     for (let i = 0; i < this.cache.transformationAnchors.length; i++) {
       const anchor = this.cache.transformationAnchors[i];
 
-      const captureInScenePosition = captures.mostRelevantInspector.getCoordsInScenePosition();
-      if (Ray.isPointInsideShape(anchor, captureInScenePosition)) {
-        this.lastTransformMousePosition = captureInScenePosition;
+      const scenePositionOfCapture = captures.main.getAsScenePosition();
+      if (Ray.isPointInsideShape(anchor, scenePositionOfCapture)) {
+        this.lastTransformMousePosition = scenePositionOfCapture;
         this.shapeTransformSelectedAnchor = i;
 
-        this.transformOffsetFromTransformCenter = (<Shape>this.cache.transformationAnchors[i]).arithmeticMean().subtract(captureInScenePosition);
-        captures.lockInspectorViewTransformation = true;
+        this.transformOffsetFromTransformCenter = (<Shape>this.cache.transformationAnchors[i]).arithmeticMean().subtract(scenePositionOfCapture);
+        renderer.cache[Input.onMouseDown] = false;
       }
     }
   }
 
-  public [Input.onMouseMove](event: MouseEvent, captures: Input.Mouse.Captures): any {
-    if (!captures.mostRelevantInspector) {
-      return;
-    }
+  public [Input.onMouseMove](interaction: Input.Mouse.Interaction) {
+    const { captures, renderer } = interaction;
 
     if (this.lastTransformMousePosition && this.shapeTransformSelectedAnchor !== null) {
-      // TODO Handle rotated objects
-      const newSelectedAnchorPosition = captures.mostRelevantInspector.getCoordsInScenePosition().add(this.transformOffsetFromTransformCenter)
-      const anchorVertexIndex = (this.shapeTransformSelectedAnchor + 2) % 4;
-      const anchorVertexPosition = (<Shape>this.cache.transformationAnchors[anchorVertexIndex]).arithmeticMean();
-      const newBoxScale = newSelectedAnchorPosition.subtract(anchorVertexPosition);
-      const newBoxPosition = anchorVertexPosition.add(newBoxScale.divide(2));
+      const getAnchorPosition = (anchorIndex: number) => {
+        return (<Shape>this.cache.transformationAnchors[anchorIndex]).arithmeticMean()
+      }
+      
+      const newSelectedAnchorPosition = captures.main.getAsScenePosition().add(this.transformOffsetFromTransformCenter);
+      const oppositeOfSelectedAnchorIndex = (this.shapeTransformSelectedAnchor + 2) % 4;
+      const oppositeOfSelectedAnchorPosition = getAnchorPosition(oppositeOfSelectedAnchorIndex);
 
-      this.transform.position = newBoxPosition;
+      const newSelectedAnchorPositionRotated = newSelectedAnchorPosition.rotate(-this.transform.rotation);
+      const oppositeOfSelectedAnchorPositionRotated = oppositeOfSelectedAnchorPosition.rotate(-this.transform.rotation);
+
+
+      const newBoxScale = newSelectedAnchorPositionRotated.subtract(oppositeOfSelectedAnchorPositionRotated);
+      const newBoxPosition = oppositeOfSelectedAnchorPositionRotated.add(newBoxScale.divide(2));
+
+      const finalBoxPosition = newBoxPosition.rotate(this.transform.rotation);
+
+      this.transform.position = finalBoxPosition;
       this.transform.scale = Vector.abs(newBoxScale);
 
-      captures.lockInspectorViewTransformation = true;
+      this.lastTransformMousePosition = captures.main.getAsScenePosition();
+      renderer.cache[Input.onMouseMove] = false;
     }
   }
 
-  public [Input.onMouseUp](event: MouseEvent, captures: Input.Mouse.Captures): any {
-    if (this.lastTransformMousePosition || this.shapeTransformSelectedAnchor !== null) {
+  // public [Input.onMouseMove](interaction: Input.Mouse.Interaction) {
+  //   const { captures, renderer } = interaction;
+  
+  //   if (!captures.main) {
+  //     return;
+  //   }
+  
+  //   if (this.lastTransformMousePosition && this.shapeTransformSelectedAnchor !== null && this.cache.transformationAnchors) {
+  //     const delta = captures.main.getAsScenePosition().subtract(this.lastTransformMousePosition);
+  
+  //     // Calculate the direction from the center of the box to the selected anchor
+  //     const anchorDirection = (<Shape>this.cache.transformationAnchors[this.shapeTransformSelectedAnchor]).arithmeticMean().subtract(this.entity.transform.position).normalized;
+  
+  //     // Project the delta onto the anchor direction to get the movement in the direction of the anchor
+  //     const projectedDelta = delta.projectOnto(anchorDirection); // Vector.projection(anchorDirection, delta) // delta.projectOnto(anchorDirection);
+  
+  //     // Calculate the new size of the box based on the projected mouse movement
+  //     const newSize = this.entity.transform.scale.add(projectedDelta.multiply(2));
+  
+  //     // Calculate the position of the opposite anchor
+  //     const oppositeAnchorIndex = (this.shapeTransformSelectedAnchor + 2) % 4;
+  //     const oppositeAnchorPosition = (<Shape>this.cache.transformationAnchors[oppositeAnchorIndex]).arithmeticMean();
+  
+  //     // Calculate the new position of the box based on the position of the opposite anchor and the new size
+  //     const newPosition = oppositeAnchorPosition.add(newSize.divide(2).add(anchorDirection));
+  
+  //     // Update the size and position of the box
+  //     this.entity.transform.scale = newSize;
+  //     this.entity.transform.position = newPosition;
+  
+  //     // Update the last mouse position
+  //     this.lastTransformMousePosition = captures.main.getAsScenePosition();
+  //     renderer.cache[Input.onMouseMove] = false;
+  //   }
+  // }
+
+  public [Input.onMouseUp](interaction: Input.Mouse.Interaction) {
+    const { renderer } = interaction;
+
+    if (this.lastTransformMousePosition || this.shapeTransformSelectedAnchor !== null && this.shapeTransformSelectedAnchor) {
       this.lastTransformMousePosition = null;
       this.shapeTransformSelectedAnchor = null;
 
-      captures.lockInspectorViewTransformation = true;
+      renderer.cache[Input.onMouseUp] = false;
     }
   }
-  
 
   public static [Scene.onInstantiation](scene: Scene) {
     const spatialPartition = new SpatialPartition<MeshRenderer>(3);

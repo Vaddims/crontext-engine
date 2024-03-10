@@ -2,6 +2,7 @@ import { CacheManager, Cache } from "../cache-manager";
 
 const uncomputedCache: typeof CacheManager['uncomputed'] = CacheManager['uncomputed']
 export class MemoizationPlugin implements Cache.Entry.Plugin {
+  readonly compatibleCacheManager = CacheManager;
   readonly useOnlyPluginAccessors = true;
   private readonly computeValue: () => unknown;
   constructor(computeValue: () => unknown) {

@@ -8,6 +8,7 @@ import { Optic } from "./optic";
 import type { SimulationInspectorRenderer } from "../renderers";
 import type { Entity } from "./entity";
 import { Signal } from "./scene";
+import { Writeable } from "objectra/dist/types/util.types";
 
 export class Input {
   private static initiated = false;
@@ -85,40 +86,26 @@ export class Input {
     event: MouseEvent,
     renderer: Renderer
   ): Input.Mouse.Captures {
-    const pointOpticsInformation = renderer.getRenderingOpticCaptures(new Vector(event.offsetX, event.offsetY));
-    const captures = pointOpticsInformation.map((poi) => ({
+    const eventOffset = new Vector(event.offsetX, event.offsetY);
+
+    const pointOpticsInformation = renderer.getRenderingOpticCaptures(eventOffset);
+    const captures: Input.Mouse.Capture[] = pointOpticsInformation.map((poi) => ({
       ...poi,
-      renderer,
-      getCoordsInScenePosition: () => (
-        renderer.canvasPointToCoordinates(poi.optic, new Vector(event.offsetX, event.offsetY)) ?? Vector.zero
+      getAsScenePosition: () => (
+        renderer.canvasPointToCoordinates(poi.optic, eventOffset) ?? Vector.zero
       ),
     }));
 
-    const composedCaptures = [...captures] as any;
-    composedCaptures.fromInspector = captures.filter(capture => capture.renderer.constructor.name === 'SimulationInspectorRenderer');
-    composedCaptures.mostRelevantInspector = composedCaptures.fromInspector[0] ?? null;
-    composedCaptures.lockInspectorViewTransformation = false;
-    composedCaptures.isSelectedAtInspector = (capture: Input.Mouse.Capture, entity: Entity) => {
-      if (capture.renderer.constructor.name !== 'SimulationInspectorRenderer') {
-        return false;
-      }
+    const composedCaptures = captures as Writeable<Input.Mouse.Captures>;
 
-      return (<SimulationInspectorRenderer>capture.renderer).inspector.selectedEntities.has(entity);
-    }
+    // TODO - It main capture should be the one that is at the highest layer and the highest in the hierarchy
+    composedCaptures.main = captures[0];
 
-    return composedCaptures;
+    return composedCaptures as Input.Mouse.Captures;
   }
 
   private static addMouseEventListeners() {
-    const callRendererInputActions = (renderer: Renderer, symbol: Symbol, event: MouseEvent, captures: Input.Mouse.Captures) => {
-      if (!(renderer as any)[symbol as any]) {
-        return;
-      }
-
-      (renderer as any)[symbol as any](event, captures);
-    }
-
-    const handleMouseClick = (symbol: symbol, event: MouseEvent) => {
+    const handleMouseEvent = (symbol: symbol, event: MouseEvent) => {
       if (!event.target) {
         return;
       }
@@ -130,40 +117,33 @@ export class Input {
 
       event.preventDefault();
 
-      const captures = Input.createCaptures(event, renderer);
+      const interaction: Input.Mouse.Interaction = {
+        event,
+        renderer,
+        captures: Input.createCaptures(event, renderer),
+      };
+
+      renderer['cacheGroups'].inputReceiver.setValueForAll(true);
 
       renderer.simulation.scene.emitSignal(symbol, {
-        args: [event, captures],
+        args: [interaction],
       }).resolve();
 
-      if (!captures.lockInspectorViewTransformation) {
-        callRendererInputActions(renderer, symbol, event, captures);
+      if (!renderer.cache[symbol]) {
+        return;
+      }
+
+      if (symbol in renderer) {
+        (renderer as any)[symbol](interaction);
       }
     }
 
-    const handleMouseEvent = (symbol: symbol, event: MouseEvent) => {
-      Engine.renderers.forEach((renderer) => {
-        if (event.target !== renderer.canvas) {
-          return;
-        }
-
-        const captures = Input.createCaptures(event, renderer);        
-        renderer.simulation.scene.emitSignal(symbol, {
-          args: [event, captures],
-        }).resolve();
-
-        if (!captures.lockInspectorViewTransformation) {
-          callRendererInputActions(renderer, symbol, event, captures);
-        }
-      })
-    }
-
-    document.addEventListener('click', event => handleMouseClick(Input.onMouseClick, event));
-    document.addEventListener('dblclick', event => handleMouseClick(Input.onMouseDoubleClick, event));
-    document.addEventListener('contextmenu', event => handleMouseClick(Input.onMouseSecondaryClick, event))
+    document.addEventListener('click', event => handleMouseEvent(Input.onMouseClick, event));
+    document.addEventListener('dblclick', event => handleMouseEvent(Input.onMouseDoubleClick, event));
+    document.addEventListener('contextmenu', event => handleMouseEvent(Input.onMouseSecondaryClick, event))
     document.addEventListener('mousemove', event => handleMouseEvent(Input.onMouseMove, event));
-    document.addEventListener('mousedown', event => handleMouseClick(Input.onMouseDown, event));
-    document.addEventListener('mouseup', event => handleMouseClick(Input.onMouseUp, event));
+    document.addEventListener('mousedown', event => handleMouseEvent(Input.onMouseDown, event));
+    document.addEventListener('mouseup', event => handleMouseEvent(Input.onMouseUp, event));
   }
 
   public static emitStaged(simulation: Simulation) {
@@ -198,12 +178,11 @@ export class Input {
 }
 
 export namespace Input {
-  export type MouseEventResolution = Map<Camera, Input.Mouse.ActionEvent>;
   export interface ComponentActions {
-    [Input.onMouseClick]?(event: MouseEvent, captures: Input.Mouse.Captures): Component.SignalMethodResponse;
-    [Input.onMouseDown]?(event: MouseEvent, captures: Input.Mouse.Captures): Component.SignalMethodResponse<any>;
-    [Input.onMouseUp]?(event: MouseEvent, captures: Input.Mouse.Captures): Component.SignalMethodResponse;
-    [Input.onMouseMove]?(event: MouseEvent, captures: Input.Mouse.Captures): Component.SignalMethodResponse;
+    [Input.onMouseClick]?(interaction: Input.Mouse.Interaction): Component.SignalMethodResponse;
+    [Input.onMouseDown]?(interaction: Input.Mouse.Interaction): Component.SignalMethodResponse;
+    [Input.onMouseUp]?(interaction: Input.Mouse.Interaction): Component.SignalMethodResponse;
+    [Input.onMouseMove]?(interaction: Input.Mouse.Interaction): Component.SignalMethodResponse;
   }
 
   export class KeyAction {
@@ -219,22 +198,18 @@ export namespace Input {
   }
 
   export namespace Mouse {
-    export interface ActionEvent {
-      readonly renderer: Renderer;
-      readonly optic: Optic | null;
-      readonly clientScenePosition: Vector;
-    }
-
-    export interface Capture<R extends Renderer = Renderer> extends Renderer.OpticCapture {
-      readonly renderer: R;
-      readonly getCoordsInScenePosition: () => Vector;
+    export interface Capture extends Renderer.OpticCapture<unknown> {
+      readonly getAsScenePosition: () => Vector;
     }
 
     export type Captures = Capture[] & {
-      readonly fromInspector: Capture<SimulationInspectorRenderer>[];
-      readonly mostRelevantInspector: Capture<SimulationInspectorRenderer> | null;
-      readonly isSelectedAtInspector: (capture: Capture, entity: Entity) => boolean;
-      lockInspectorViewTransformation: boolean;
+      readonly main: Capture;
     };
+
+    export interface Interaction {
+      readonly event: MouseEvent;
+      readonly renderer: Renderer;
+      readonly captures: Captures;
+    }
   } 
 }

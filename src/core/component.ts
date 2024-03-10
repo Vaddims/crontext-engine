@@ -52,7 +52,7 @@ export class Component {
   }
 
   public [onInternalUpdate]() {
-    this.cacheManager.performUpdateActions();
+    this.cacheManager.tickAllControllers();
   }
 
   public destroy() {

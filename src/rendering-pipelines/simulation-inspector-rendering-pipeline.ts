@@ -17,7 +17,8 @@ import { Simulation, SimulationInspector, TransformMode } from "../simulations";
 
 interface TransformControlColorPalette {
   readonly main: Color;
-  readonly outline: Color;
+  readonly headOutline: Color;
+  readonly directionOutline: Color;
 }
 
 export class SimulationInspectorRenderingPipeline extends SimulationRenderingPipeline<SimulationInspectorRenderer> {
@@ -26,16 +27,18 @@ export class SimulationInspectorRenderingPipeline extends SimulationRenderingPip
     showUsableAreas: false,
     colorPalette: {
       omnidirectional: {
-        main: new Color(75, 75, 255),
-        outline: new Color(0, 0, 200),
+        main: new Color(43, 155, 233),
+        outline: Color.white,
       },
       horizontal: {
-        main: Color.red,
-        outline: new Color(200, 0, 0),
+        main: new Color(255, 50, 50),
+        headOutline: new Color(200, 30, 30),
+        directionOutline: new Color(200, 30, 30),
       },
       vertical: {
-        main: Color.green,
-        outline: new Color(0, 200, 0),
+        main: new Color(80, 255, 80),
+        headOutline: new Color(100, 200, 100),
+        directionOutline: new Color(100, 200, 100),
       },
       usableControlArea: {
         main: Color.transparent,
@@ -137,8 +140,8 @@ export class SimulationInspectorRenderingPipeline extends SimulationRenderingPip
       this.renderShape(directionalShape, Vector.zero, 0, controlColorPalette.main);
       this.renderShape(headShape, Vector.zero, 0, controlColorPalette.main);
 
-      this.outlineShape(directionalShape, controlColorPalette.outline);
-      this.outlineShape(headShape, controlColorPalette.outline)
+      this.outlineShape(directionalShape, controlColorPalette.directionOutline);
+      this.outlineShape(headShape, controlColorPalette.headOutline)
     }
 
     renderTransformAxis(Vector.right, colorPalette.horizontal);
@@ -162,7 +165,7 @@ export class SimulationInspectorRenderingPipeline extends SimulationRenderingPip
     const lineWidth = 5;
     const controlAxisIndicatorScalar = .4;
 
-    this.renderFixedCircle(position, circleRadius, new Color(75, 75, 255), lineWidth);
+    this.renderFixedCircle(position, circleRadius, this.transformControl.colorPalette.omnidirectional.main, lineWidth);
     const renderDirectionalLine = (direction: Vector, color: Color) => {
       const pivot = position.add(
         rotatedOffsetPosition(direction.multiply(circleRadius - controlAxisIndicatorScalar / 2).multiply(this.optic.scale), controlRotation)
@@ -196,8 +199,8 @@ export class SimulationInspectorRenderingPipeline extends SimulationRenderingPip
       this.renderShape(directionalShape, Vector.zero, 0, controlColorPalette.main);
       this.renderShape(headShape, Vector.zero, 0, controlColorPalette.main);
 
-      this.outlineShape(directionalShape, controlColorPalette.outline);
-      this.outlineShape(headShape, controlColorPalette.outline)
+      this.outlineShape(directionalShape, controlColorPalette.directionOutline);
+      this.outlineShape(headShape, controlColorPalette.headOutline)
     }
 
     renderTransformAxis(Vector.right, colorPalette.horizontal);
@@ -237,6 +240,18 @@ export class SimulationInspectorRenderingPipeline extends SimulationRenderingPip
     context.save();
     context.translate(...renderingPosition.raw);
     this.defineFixedShapePath(shape);
+    context.fillStyle = color.toString()
+    context.fill();
+    context.restore();
+  }
+
+  public uni_renderShape(shape: Shape, color: Color) {
+    const { context } = this;
+    const renderingPosition = this.getRenderingPosition(shape.getOffset());
+    
+    context.save();
+    context.translate(...renderingPosition.raw);
+    this.uni_defineShapePath(shape);
     context.fillStyle = color.toString()
     context.fill();
     context.restore();

@@ -41,28 +41,21 @@ export class SimulationInspectorRenderer extends Renderer {
       canvas.addEventListener('wheel', this.safariWheelHandler.bind(this));
     } else {
       canvas.addEventListener('wheel', this.wheelHandler.bind(this));
-      // canvas.addEventListener('mousemove', this.mouseHandler.bind(this));
     }
-
-    // canvas.addEventListener('mousemove', this.mousePositionHandler.bind(this));
-    // canvas.addEventListener('mousedown', this.mouseDownHandler.bind(this));
-    // canvas.addEventListener('mouseup', this.mouseUpHandler.bind(this));
+    
     canvas.addEventListener('keydown', this.keypressHandler.bind(this));
   }
 
-  public [Input.onMouseDown](event: MouseEvent) {
-    // console.log('down')
-    this.mouseDownHandler(event);
+  public [Input.onMouseDown](interaction: Input.Mouse.Interaction) {
+    this.mouseDownHandler(interaction.event);
   }
 
-  public [Input.onMouseUp](event: MouseEvent) {
-    // console.log('up')
-    this.mouseUpHandler(event);
+  public [Input.onMouseUp](interaction: Input.Mouse.Interaction) {
+    this.mouseUpHandler(interaction.event);
   }
 
-  public [Input.onMouseMove](event: MouseEvent) {
-    // console.log('move')
-    this.mouseHandler(event);
+  public [Input.onMouseMove](interaction: Input.Mouse.Interaction) {
+    this.mouseHandler(interaction.event);
   }
 
   public keypressHandler(event: KeyboardEvent) {
@@ -175,6 +168,7 @@ export class SimulationInspectorRenderer extends Renderer {
   }
 
   public updateTick(): void {
+    super.updateTick();
     this.render();
   }
   

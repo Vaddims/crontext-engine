@@ -13,6 +13,11 @@ export class Gizmos {
     private readonly renderingPipeline: SimulationInspectorRenderingPipeline
   ) {}
 
+  readonly colorPallete = {
+    selectedAccessories: new Color(43, 155, 233),
+    selectedOutline: new Color(34, 85, 254),
+  }
+
   public get currentScene() {
     return this.renderer.inspector.simulation.scene;
   }
@@ -74,6 +79,10 @@ export class Gizmos {
 
   public renderShape(shape: Shape, center: Vector = Vector.zero, rotation: number = 0, color: Color = Color.yellow) {
     this.renderingPipeline.renderShape(shape, center, rotation, color);
+  }
+
+  public uni_renderShape(shape: Shape, color: Color) {
+    this.renderingPipeline.uni_renderShape(shape, color);
   }
 
   public renderFixedShape(shape: Shape, color = Color.red) {

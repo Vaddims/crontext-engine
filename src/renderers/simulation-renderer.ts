@@ -12,6 +12,7 @@ export class SimulationRenderer extends Renderer {
   }
 
   public updateTick(): void {
+    super.updateTick();
     this.simulation.updateTick();
     this.render();
   }

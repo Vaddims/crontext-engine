@@ -8,38 +8,55 @@ export class TickCacheManager extends CacheManager<TickCache.Entry.Plugin, TickC
 
     return {
       ...super.createController(propertyKey),
-      simulationUpdate: () => {
+      tick: () => {
         const metadata = findMetadata();
         if (!metadata) {
           return;
         }
 
-        if (metadata.plugin) {
-          if (metadata.plugin.onUpdate) {
-            return metadata.plugin.onUpdate(metadata);
-          }
+        if (!metadata.plugin || !CacheManager.isCompatibleWithPlugin(TickCacheManager, metadata.plugin)) {
+          return;
+        }
 
-          if (metadata.plugin.useOnlyPluginAccessors) {
-            return;
-          }
+        if (metadata.plugin.onTick) {
+          return metadata.plugin.onTick(metadata);
+        }
+
+        if (metadata.plugin.useOnlyPluginAccessors) {
+          return;
         }
       }
     }
   }
 
-  public performUpdateActions() {
-    Object.values(this.controller).map(controller => controller.simulationUpdate());
+  override group(...keys: PropertyKey[]) {
+    return {
+      ...super.group(...keys),
+      tickAll: () => {
+        keys.map(key => this.controller[key].tick());
+      }
+    }
+  }
+
+  public tickAllControllers(inGroup?: string) {
+    Object.values(this.controller).map(controller => controller.tick());
   }
 }
 
 export namespace TickCache {
   export namespace Entry {
     export interface Plugin extends Cache.Entry.Plugin {
-      onUpdate?(metadata: Cache.Entry): void;
+      onTick?(metadata: Cache.Entry): void;
     }
 
     export interface Controller<Plugin = Entry.Plugin> extends Cache.Entry.Controller<Entry.Plugin> {
-      simulationUpdate: () => void;
+      tick: () => void;
+    }
+  }
+
+  export namespace Group {
+    export interface Controller extends Cache.Group.Controller {
+      tickAll: () => void;
     }
   }
 }

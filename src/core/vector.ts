@@ -211,6 +211,25 @@ export class Vector {
 		return max;
 	}
 
+  public rotate(radians: number) {
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+    const x = this.x * cos - this.y * sin;
+    const y = this.x * sin + this.y * cos;
+    return new Vector(x, y);
+  }
+
+  public static min(...vectors: Vector[]) {
+		let min = Vector.safePositive;
+		for (const vector of vectors) {
+      if (vector.magnitude < min.magnitude) {
+        min = vector;
+      }
+    }
+
+		return min;
+	}
+
   public static arithemticMean(...vectors: Vector[]) {
     const center = vectors.reduce(((center, vector) => center.add(vector)), Vector.one).divide(vectors.length);
     const offsetSum = vectors.reduce((offsetSum, vector) => offsetSum.add(vector.subtract(center)), Vector.zero);

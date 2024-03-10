@@ -1,11 +1,12 @@
-import { IndexableObject } from "objectra/dist/types/util.types";
+import { Constructor, IndexableObject } from "objectra/dist/types/util.types";
+import { getConstructorSuperConstructors } from "objectra/dist/utils";
 
 const uncomputedSymbol = Symbol('CacheManager.uncomputed');
 export class CacheManager<Plugin extends Cache.Entry.Plugin = Cache.Entry.Plugin, Controller extends Cache.Entry.Controller = Cache.Entry.Controller> {
   protected readonly cacheEntries: IndexableObject<Cache.Entry<Plugin>> = {};
 
-  public readonly controller: IndexableObject<Controller>;
   public readonly cache: IndexableObject<any>;
+  public readonly controller: IndexableObject<Controller>;
 
   public getMetadataHelperFunctions(propertyKey: string | symbol) {
     const findMetadata = () => this.cacheEntries[propertyKey];
@@ -135,8 +136,61 @@ export class CacheManager<Plugin extends Cache.Entry.Plugin = Cache.Entry.Plugin
     }
   }
 
+  private static getCompatibleCacheManagers(cacheManager: Constructor<CacheManager>): [Constructor<CacheManager>, ...Constructor<CacheManager>[]] {
+    const compatibleCacheManagers: [Constructor<CacheManager>, ...Constructor<CacheManager>[]] = [cacheManager];
+
+    if (cacheManager === CacheManager) {
+      return compatibleCacheManagers;
+    }
+
+    for (const ancestorConstructor of getConstructorSuperConstructors(this.constructor as Constructor)) {
+      compatibleCacheManagers.push(ancestorConstructor as Constructor<CacheManager>);
+      if (ancestorConstructor === CacheManager) {
+        break;
+      }
+    }
+
+    return compatibleCacheManagers;
+  }
+
+  public static isCompatibleWithPlugin(cacheManager: Constructor<CacheManager>, plugin: Cache.Entry.Plugin): boolean {
+    if (cacheManager === plugin.compatibleCacheManager) {
+      return true;
+    }
+
+    for (const ancestorConstructor of getConstructorSuperConstructors(cacheManager)) {
+      if (ancestorConstructor === plugin.compatibleCacheManager) {
+        return true;
+      }
+
+      if (ancestorConstructor === CacheManager) {
+        break;
+      }
+    }
+
+    return false;
+  }
+
+  public group(...keys: (string | number | symbol)[]): Cache.Group.Controller {
+    const memberControllers = keys.map(key => this.controller[key]);
+
+    return {
+      setPlugin: (plugin: Cache.Entry.Plugin | null) => {
+        for (const groupController of memberControllers) {
+          groupController.setPlugin(plugin);
+        }
+      },
+      setValueForAll: (newValue: unknown) => {
+        for (const groupController of memberControllers) {
+          groupController.set(newValue);
+        }
+      }
+    }
+  }
+
   private static readonly uncomputed: typeof uncomputedSymbol = uncomputedSymbol;
 }
+
 
 export namespace Cache {
   export interface Entry<Plugin extends Entry.Plugin = Entry.Plugin, T = any> {
@@ -147,6 +201,7 @@ export namespace Cache {
 
   export namespace Entry {
     export interface Plugin {
+      compatibleCacheManager: Constructor<CacheManager>;
       useOnlyPluginAccessors?: boolean;
       onGet?(metadata: Entry): any;
       onSet?(metadata: Entry, newValue: unknown): void;
@@ -159,6 +214,13 @@ export namespace Cache {
       set: (newValue: unknown) => void;
       clear: () => boolean;
       delete: () => boolean;
+    }
+  }
+
+  export namespace Group {
+    export interface Controller {
+      setPlugin: (plugin: Cache.Entry.Plugin | null) => void;
+      setValueForAll: (newValue: unknown) => void;
     }
   }
 }

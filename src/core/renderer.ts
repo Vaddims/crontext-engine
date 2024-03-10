@@ -1,9 +1,14 @@
 import { Simulation } from "../simulations";
+import { TickCache, TickCacheManager } from "./cache/tick-cache-manager";
+import { Input } from "./input";
 import { Optic } from "./optic";
 import { Vector } from "./vector";
 
-export interface Renderer {
+export interface Renderer extends Input.ComponentActions {
   defineListeners?(): () => void;
+  // [Input.onMouseDown]?(interaction: Input.Mouse.Interaction): void;
+  // [Input.onMouseDown]?(interaction: Input.Mouse.Interaction): void;
+  // [Input.onMouseUp]?(interaction: Input.Mouse.Interaction): void;
 }
 
 export abstract class Renderer {
@@ -12,6 +17,13 @@ export abstract class Renderer {
   public readonly context: CanvasRenderingContext2D;
   public scaleDependenceAxis: 'width' | 'height' | 'pixel' = 'height';
   public unitFit = 10;
+
+  private cacheManager = new TickCacheManager();
+  public cache = this.cacheManager.cache;
+
+  public readonly cacheGroups: Renderer.CacheGroups = {
+    inputReceiver: this.cacheManager.group(Input.onMouseUp, Input.onMouseDown, Input.onMouseMove),
+  }
 
   public abstract readonly simulation: Simulation;
 
@@ -25,7 +37,9 @@ export abstract class Renderer {
   }
 
   public abstract render(): void;
-  public abstract updateTick(): void;
+  public updateTick() {
+    this.cacheGroups.inputReceiver.tickAll();
+  };
 
   public resize(size: Vector) {
     const { canvas } = this;
@@ -85,5 +99,9 @@ export namespace Renderer {
   export type OpticCapture<P = null> = {
     readonly optic: Optic;
     readonly payload: P;
+  }
+
+  export interface CacheGroups {
+    readonly inputReceiver: TickCache.Group.Controller;
   }
 }
