@@ -165,14 +165,17 @@ export class SimulationInspectorRenderingPipeline extends SimulationRenderingPip
     const lineWidth = 5;
     const controlAxisIndicatorScalar = .4;
 
+    this.renderFixedCircle(position, circleRadius, Color.white.withAlpha(0.75), lineWidth * 1.75);
     this.renderFixedCircle(position, circleRadius, this.transformControl.colorPalette.omnidirectional.main, lineWidth);
+
     const renderDirectionalLine = (direction: Vector, color: Color) => {
       const pivot = position.add(
         rotatedOffsetPosition(direction.multiply(circleRadius - controlAxisIndicatorScalar / 2).multiply(this.optic.scale), controlRotation)
       );
 
       const lineDirection = rotatedOffsetPosition(direction.multiply(controlAxisIndicatorScalar), controlRotation);
-      this.renderFixedDirectionalLine(pivot, lineDirection, color, lineWidth)
+      this.renderFixedDirectionalLine(pivot, lineDirection, this.transformControl.colorPalette.omnidirectional.main, lineWidth * 1.75);
+      this.renderFixedDirectionalLine(pivot, lineDirection, color, lineWidth);
     }
 
     renderDirectionalLine(Vector.right, colorPalette.horizontal.main)

@@ -130,27 +130,14 @@ export class CacheManager<Plugin extends Cache.Entry.Plugin = Cache.Entry.Plugin
     });
   }
 
+  public getExploredCacheEntryKeys() {
+    return Object.keys(this.cacheEntries);
+  }
+
   private static createMetadata<Plugin extends Cache.Entry.Plugin = Cache.Entry.Plugin>(): Cache.Entry<Plugin> {
     return {
       value: uncomputedSymbol,
     }
-  }
-
-  private static getCompatibleCacheManagers(cacheManager: Constructor<CacheManager>): [Constructor<CacheManager>, ...Constructor<CacheManager>[]] {
-    const compatibleCacheManagers: [Constructor<CacheManager>, ...Constructor<CacheManager>[]] = [cacheManager];
-
-    if (cacheManager === CacheManager) {
-      return compatibleCacheManagers;
-    }
-
-    for (const ancestorConstructor of getConstructorSuperConstructors(this.constructor as Constructor)) {
-      compatibleCacheManagers.push(ancestorConstructor as Constructor<CacheManager>);
-      if (ancestorConstructor === CacheManager) {
-        break;
-      }
-    }
-
-    return compatibleCacheManagers;
   }
 
   public static isCompatibleWithPlugin(cacheManager: Constructor<CacheManager>, plugin: Cache.Entry.Plugin): boolean {

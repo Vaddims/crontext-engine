@@ -1,5 +1,6 @@
 import { CacheManager, Cache } from "../cache-manager";
 
+// Capl stand for: CAche PLugin
 const uncomputedCache: typeof CacheManager['uncomputed'] = CacheManager['uncomputed']
 export class MemoizationPlugin implements Cache.Entry.Plugin {
   readonly compatibleCacheManager = CacheManager;

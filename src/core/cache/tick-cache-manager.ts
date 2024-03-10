@@ -14,8 +14,12 @@ export class TickCacheManager extends CacheManager<TickCache.Entry.Plugin, TickC
           return;
         }
 
-        if (!metadata.plugin || !CacheManager.isCompatibleWithPlugin(TickCacheManager, metadata.plugin)) {
+        if (!metadata.plugin) {
           return;
+        }
+
+        if (!CacheManager.isCompatibleWithPlugin(TickCacheManager, metadata.plugin)) {
+          throw new Error(`Plugin(${metadata.plugin.constructor.name}) is not compatible with the CacheManager(${this.constructor.name}) at ${arguments.callee.name}`);
         }
 
         if (metadata.plugin.onTick) {
@@ -38,8 +42,8 @@ export class TickCacheManager extends CacheManager<TickCache.Entry.Plugin, TickC
     }
   }
 
-  public tickAllControllers(inGroup?: string) {
-    Object.values(this.controller).map(controller => controller.tick());
+  public tickAllControllers() {
+    this.getExploredCacheEntryKeys().map(key => this.controller[key].tick());
   }
 }
 

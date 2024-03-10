@@ -153,6 +153,7 @@ export class MeshRenderer extends BuildinComponent implements Input.ComponentAct
         const anchor = anchors[this.shapeTransformSelectedAnchor];
         gizmos.renderFixedDisk(anchor.arithmeticMean(), ANCHOR_SCALE / 2, gizmos.colorPallete.selectedAccessories);
         gizmos.renderFixedCircle(anchor.arithmeticMean(), ANCHOR_SCALE / 2, Color.white);
+
         this.cache.transformationAnchors = anchors;
         return;
       }
@@ -238,42 +239,6 @@ export class MeshRenderer extends BuildinComponent implements Input.ComponentAct
       renderer.cache[Input.onMouseMove] = false;
     }
   }
-
-  // public [Input.onMouseMove](interaction: Input.Mouse.Interaction) {
-  //   const { captures, renderer } = interaction;
-  
-  //   if (!captures.main) {
-  //     return;
-  //   }
-  
-  //   if (this.lastTransformMousePosition && this.shapeTransformSelectedAnchor !== null && this.cache.transformationAnchors) {
-  //     const delta = captures.main.getAsScenePosition().subtract(this.lastTransformMousePosition);
-  
-  //     // Calculate the direction from the center of the box to the selected anchor
-  //     const anchorDirection = (<Shape>this.cache.transformationAnchors[this.shapeTransformSelectedAnchor]).arithmeticMean().subtract(this.entity.transform.position).normalized;
-  
-  //     // Project the delta onto the anchor direction to get the movement in the direction of the anchor
-  //     const projectedDelta = delta.projectOnto(anchorDirection); // Vector.projection(anchorDirection, delta) // delta.projectOnto(anchorDirection);
-  
-  //     // Calculate the new size of the box based on the projected mouse movement
-  //     const newSize = this.entity.transform.scale.add(projectedDelta.multiply(2));
-  
-  //     // Calculate the position of the opposite anchor
-  //     const oppositeAnchorIndex = (this.shapeTransformSelectedAnchor + 2) % 4;
-  //     const oppositeAnchorPosition = (<Shape>this.cache.transformationAnchors[oppositeAnchorIndex]).arithmeticMean();
-  
-  //     // Calculate the new position of the box based on the position of the opposite anchor and the new size
-  //     const newPosition = oppositeAnchorPosition.add(newSize.divide(2).add(anchorDirection));
-  
-  //     // Update the size and position of the box
-  //     this.entity.transform.scale = newSize;
-  //     this.entity.transform.position = newPosition;
-  
-  //     // Update the last mouse position
-  //     this.lastTransformMousePosition = captures.main.getAsScenePosition();
-  //     renderer.cache[Input.onMouseMove] = false;
-  //   }
-  // }
 
   public [Input.onMouseUp](interaction: Input.Mouse.Interaction) {
     const { renderer } = interaction;
