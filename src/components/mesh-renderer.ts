@@ -1,5 +1,5 @@
 import { Transformator } from "objectra";
-import { Component, EntityTransform, Input, Ray, Renderer, Scene, Transform, Vector } from "../core";
+import { Component, Entity, EntityTransform, Input, Ray, Renderer, Scene, Transform, Vector } from "../core";
 import { Color } from "../core/color";
 import { Shape } from "../core/shape";
 import { Rectangle } from "../shapes/rectangle";
@@ -126,7 +126,18 @@ export class MeshRenderer extends BuildinComponent implements Input.ComponentAct
     }
   }
 
+  public showInternalScaleBox = false;
+  public showGlobalScaleBox = false;
+
   public [Component.onGizmosRender](gizmos: Gizmos, isShadowSelected: boolean) {
+    if (this.showGlobalScaleBox) {
+      gizmos.highlightVertices(new Rectangle().withTransform(this.transform.toPureTransform()).vertices, Color.blue)
+    }
+
+    if (this.showInternalScaleBox) {
+      gizmos.highlightVertices(new Rectangle().withTransform(this.transform.toPureTransform().setScale(this.transform.localScale)).vertices, Color.red)
+    }
+
     if (!isShadowSelected) {
       return;
     }
@@ -136,45 +147,45 @@ export class MeshRenderer extends BuildinComponent implements Input.ComponentAct
     gizmos.highlightVertices(vertices, gizmos.colorPallete.selectedOutline);
 
     const optic = gizmos.renderer.inspector.optic;
-    if (this.shape instanceof Rectangle) {
-      const ets = this.getEntityTransformedShape();
-      const anchors: Shape[] = [];
-      const ANCHOR_SCALE = .3;
-      for (let i = 0; i < ets.vertices.length; i++) {
-        const fixedAnchor = new Rectangle().withScale(ANCHOR_SCALE).withOffset(ets.vertices[i]).withScale(optic.scale)
-        anchors.push(fixedAnchor);
-      }
+    // if (this.shape instanceof Rectangle) {
+    //   const ets = this.getEntityTransformedShape();
+    //   const anchors: Shape[] = [];
+    //   const ANCHOR_SCALE = .3;
+    //   for (let i = 0; i < ets.vertices.length; i++) {
+    //     const fixedAnchor = new Rectangle().withScale(ANCHOR_SCALE).withOffset(ets.vertices[i]).withScale(optic.scale)
+    //     anchors.push(fixedAnchor);
+    //   }
 
-      if (this.color.alpha < .5 || this.opacity < .5) {
-        gizmos.uni_renderShape(ets, gizmos.colorPallete.selectedOutline.withAlpha(0.2));
-      }
+    //   if (this.color.alpha < .5 || this.opacity < .5) {
+    //     gizmos.uni_renderShape(ets, gizmos.colorPallete.selectedOutline.withAlpha(0.2));
+    //   }
 
-      if (this.shapeTransformSelectedAnchor !== null) {
-        const anchor = anchors[this.shapeTransformSelectedAnchor];
-        gizmos.renderFixedDisk(anchor.arithmeticMean(), ANCHOR_SCALE / 2, gizmos.colorPallete.selectedAccessories);
-        gizmos.renderFixedCircle(anchor.arithmeticMean(), ANCHOR_SCALE / 2, Color.white);
+    //   if (this.shapeTransformSelectedAnchor !== null) {
+    //     const anchor = anchors[this.shapeTransformSelectedAnchor];
+    //     gizmos.renderFixedDisk(anchor.arithmeticMean(), ANCHOR_SCALE / 2, gizmos.colorPallete.selectedAccessories);
+    //     gizmos.renderFixedCircle(anchor.arithmeticMean(), ANCHOR_SCALE / 2, Color.white);
 
-        this.cache.transformationAnchors = anchors;
-        return;
-      }
+    //     this.cache.transformationAnchors = anchors;
+    //     return;
+    //   }
 
-      const mustFitInLine = 3;
-      const a = ets.vertices[0].subtract(ets.vertices[1]);
-      const b = ets.vertices[1].subtract(ets.vertices[2]);
-      const min = Vector.min(a, b)
-      const shouldRenderAnchors = min.magnitude >= anchors[0].getScale().x * (mustFitInLine - 1); // divide by 2 because the anchor is offseted by half of its scale
+    //   const mustFitInLine = 3;
+    //   const a = ets.vertices[0].subtract(ets.vertices[1]);
+    //   const b = ets.vertices[1].subtract(ets.vertices[2]);
+    //   const min = Vector.min(a, b)
+    //   const shouldRenderAnchors = min.magnitude >= anchors[0].getScale().x * (mustFitInLine - 1); // divide by 2 because the anchor is offseted by half of its scale
 
-      if (!shouldRenderAnchors) {
-        return;
-      }
+    //   if (!shouldRenderAnchors) {
+    //     return;
+    //   }
 
-      for (const anchor of anchors) {
-        gizmos.renderFixedDisk(anchor.arithmeticMean(), ANCHOR_SCALE / 2, gizmos.colorPallete.selectedAccessories);
-        gizmos.renderFixedCircle(anchor.arithmeticMean(), ANCHOR_SCALE / 2, Color.white);
-      }
+    //   for (const anchor of anchors) {
+    //     gizmos.renderFixedDisk(anchor.arithmeticMean(), ANCHOR_SCALE / 2, gizmos.colorPallete.selectedAccessories);
+    //     gizmos.renderFixedCircle(anchor.arithmeticMean(), ANCHOR_SCALE / 2, Color.white);
+    //   }
 
-      this.cache.transformationAnchors = anchors;
-    }
+    //   this.cache.transformationAnchors = anchors;
+    // }
   }
 
   public transformOffsetFromTransformCenter = Vector.zero;
@@ -262,7 +273,44 @@ export class MeshRenderer extends BuildinComponent implements Input.ComponentAct
   }
 
   public getEntityTransformedShape() {
-    return this.shape.withTransform(this.transform.toPureLocalTransform());
+    // Works  
+    // let skewedPosition = Vector.zero;
+
+    // for (const entity of [...this.entity.ancestorEntitiesTrace, this.entity]) {
+    //   const ps = entity.parent?.transform.scale ?? Vector.one;
+    //   const pr = entity.parent?.transform.rotation ?? 0;
+    //   const offsetFromParent = entity.transform.localPosition.rotate(pr).multiply(ps);
+    //   skewedPosition = skewedPosition.add(offsetFromParent);
+    // }
+
+    // const ps = this.entity.parent?.transform.scale ?? Vector.one;
+    // return this.shape.withTransform(
+    //   new Transform(
+    //     skewedPosition,
+    //     Vector.one,
+    //     this.transform.rotation
+    //   )
+    // ).withScale(this.entity.transform.scale)
+
+    // ! this.Skew = this.localRotation not zero and parent.scale not one
+
+    let skewedPosition = Vector.zero;
+
+    for (const entity of [...this.entity.ancestorEntitiesTrace, this.entity]) {
+      const ps = entity.parent?.transform.scale ?? Vector.one;
+      const pr = entity.parent?.transform.rotation ?? 0;
+      const offsetFromParent = entity.transform.localPosition.rotate(pr).multiply(ps);
+      skewedPosition = skewedPosition.add(offsetFromParent);
+    }
+
+    const ps = this.entity.parent?.transform.scale ?? Vector.one;
+    return this.shape.withTransform(
+      new Transform(
+        skewedPosition,
+        Vector.one,
+        this.transform.rotation
+      )
+    ).withScale(this.entity.transform.scale)
   }
 }
 

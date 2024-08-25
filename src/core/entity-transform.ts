@@ -101,8 +101,15 @@ export class EntityTransform {
     }
 
     const parentTransform = this.entity.parent.transform;
-    const localPosition = rotatedOffsetPosition(this.localPosition.multiply(parentTransform.scale), parentTransform.rotation);
-    const position = parentTransform.position.add(localPosition);
+    // todo add skew
+
+    // most 
+    // const skew = this.scale
+    // const offsetFromParent = this.localPosition.rotate(parentTransform.rotation).multiply(skew).rotate(-parentTransform.rotation);
+    // const localPosition = rotatedOffsetPosition(offsetFromParent, parentTransform.rotation);
+
+    const transformedLocalPosition = this.localPosition.multiply(this.scale).rotate(parentTransform.rotation)
+    const position = parentTransform.position.add(transformedLocalPosition);
     return position;
   }
 
@@ -184,11 +191,26 @@ export class EntityTransform {
   }
 
   private calculateGlobalScale() {
-    return this.internalLocalScale;
+    if (!this.entity.parent) {
+      return this.internalLocalScale;
+    }
+
+    const parentTransform = this.entity.parent.transform;
+    // const scale = this.internalLocalScale.rotate(-this.localRotation).multiply(parentTransform.scale).rotate(this.localRotation)
+    const scale = this.internalLocalScale.multiply(parentTransform.scale)
+
+    return scale;
   }
 
   private calculateLocalScale(globalScale: Vector) {
-    return globalScale;
+    // the reverse of calculateGlobalScale
+    if (!this.entity.parent) {
+      return globalScale;
+    }
+
+    const parentTransform = this.entity.parent.transform;
+    const scale = globalScale.rotate(-parentTransform.rotation).divide(parentTransform.scale).rotate(parentTransform.rotation);
+    return scale;
   }
 
   public get rotation() {
@@ -205,9 +227,12 @@ export class EntityTransform {
     this.cachedGlobalRotation = rotation;
     this.internalLocalRotation = this.calculateLocalRotation(rotation);
 
+    this.cachedGlobalScale = null;
+
     for (const entity of this.entity.getFlattenChildren()) {
       entity.transform.cachedGlobalPosition = null;
       entity.transform.cachedGlobalRotation = null;
+      entity.transform.cachedGlobalScale = null;
     }
 
     if (initialCachedRotation === null || initialCachedRotation !== rotation) {

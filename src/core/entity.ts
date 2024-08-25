@@ -74,6 +74,21 @@ export class Entity {
     return this.scene && !this.parent;
   }
 
+  public get ancestorEntitiesTrace() {
+    const trace: Entity[] = [this];
+
+    for (const entity of trace) {
+      const parent = entity.parent;
+      if (parent) {
+        trace.push(parent);
+      }
+    }
+
+    trace.shift();
+    trace.reverse();
+    return trace;
+  }
+
   public getFlattenChildren() {
     const flattenChildren = [];
     let entity: Entity = this;
